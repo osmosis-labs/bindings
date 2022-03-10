@@ -52,6 +52,25 @@ impl Pool {
             .map(|c| c.amount)
     }
 
+    pub fn spot_price(
+        &self,
+        denom_in: &str,
+        denom_out: &str,
+        with_swap_fee: bool,
+    ) -> Result<Decimal, OsmosisError> {
+        // ensure they have both assets
+        let price = match (self.get_amount(denom_in), self.get_amount(denom_out)) {
+            (Some(a), Some(mut b)) => {
+                if with_swap_fee {
+                    b = b * (Decimal::one() - self.fee)
+                }
+                Decimal::from_ratio(b, a)
+            }
+            _ => return Err(OsmosisError::AssetNotInPool),
+        };
+        Ok(price)
+    }
+
     pub fn gamm_denom(&self, pool_id: u64) -> String {
         // see https://github.com/osmosis-labs/osmosis/blob/e13cddc698a121dce2f8919b2a0f6a743f4082d6/x/gamm/types/key.go#L52-L54
         format!("gamm/pool/{}", pool_id)
@@ -82,8 +101,8 @@ impl OsmosisModule {
     }
 
     /// Used to mock out the response for TgradeQuery::ValidatorVotes
-    pub fn set_pool(&self, storage: &mut dyn Storage, pool_id: u64, pool: Pool) -> StdResult<()> {
-        POOLS.save(storage, pool_id, &pool)
+    pub fn set_pool(&self, storage: &mut dyn Storage, pool_id: u64, pool: &Pool) -> StdResult<()> {
+        POOLS.save(storage, pool_id, pool)
     }
 }
 
@@ -163,22 +182,7 @@ impl Module for OsmosisModule {
                 with_swap_fee,
             } => {
                 let pool = POOLS.load(storage, swap.pool_id)?;
-                // ensure they have both assets
-                let price = match (
-                    pool.get_amount(&swap.denom_in),
-                    pool.get_amount(&swap.denom_out),
-                ) {
-                    (Some(a), Some(mut b)) => {
-                        if with_swap_fee {
-                            b = b * (Decimal::one() - pool.fee)
-                        }
-                        Decimal::from_ratio(b, a)
-                    }
-                    _ => {
-                        // TODO: custom error types
-                        panic!("Wrong asset types");
-                    }
-                };
+                let price = pool.spot_price(&swap.denom_in, &swap.denom_out, with_swap_fee)?;
                 Ok(to_binary(&SpotPriceResponse { price })?)
             }
             // TODO
@@ -192,8 +196,8 @@ pub enum OsmosisError {
     #[error("{0}")]
     Std(#[from] StdError),
 
-    #[error("Unauthorized: {0}")]
-    Unauthorized(String),
+    #[error("Asset not in pool")]
+    AssetNotInPool,
 }
 
 pub type OsmosisAppWrapped =
@@ -270,8 +274,9 @@ impl OsmosisApp {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cosmwasm_std::Uint128;
+    use cosmwasm_std::{coin, Uint128};
     use cw_multi_test::Executor;
+    use osmo_bindings::Swap;
 
     #[test]
     fn mint_token() {
@@ -318,5 +323,45 @@ mod tests {
         // but no minting of unprefixed version
         let empty = app.wrap().query_balance(rcpt.as_str(), subdenom).unwrap();
         assert_eq!(empty.amount, Uint128::zero());
+    }
+
+    #[test]
+    fn query_pool() {
+        let coin_a = coin(6_000_000u128, "osmo");
+        let coin_b = coin(1_500_000u128, "atom");
+        let pool_id = 43;
+        let pool = Pool::new(coin_a.clone(), coin_b.clone());
+
+        // set up with one pool
+        let mut app = OsmosisApp::new();
+        app.init_modules(|router, _, storage| {
+            router.custom.set_pool(storage, pool_id, &pool).unwrap();
+        });
+
+        // query the pool state
+        let query = OsmosisQuery::PoolState { id: pool_id }.into();
+        let state: PoolStateResponse = app.wrap().query(&query).unwrap();
+        let expected_shares = coin(3_000_000, "gamm/pool/43");
+        assert_eq!(state.shares, expected_shares);
+        assert_eq!(state.assets, vec![coin_a.clone(), coin_b.clone()]);
+
+        // check spot price both directions
+        let query = OsmosisQuery::spot_price(pool_id, &coin_a.denom, &coin_b.denom).into();
+        let SpotPriceResponse { price } = app.wrap().query(&query).unwrap();
+        assert_eq!(price, Decimal::percent(25));
+
+        // and atom -> osmo
+        let query = OsmosisQuery::spot_price(pool_id, &coin_b.denom, &coin_a.denom).into();
+        let SpotPriceResponse { price } = app.wrap().query(&query).unwrap();
+        assert_eq!(price, Decimal::percent(400));
+
+        // with fee
+        let query = OsmosisQuery::SpotPrice {
+            swap: Swap::new(pool_id, &coin_b.denom, &coin_a.denom),
+            with_swap_fee: true,
+        };
+        let SpotPriceResponse { price } = app.wrap().query(&query.into()).unwrap();
+        // 4.00 * (1- 0.3%) = 4 * 0.997 = 3.988
+        assert_eq!(price, Decimal::permille(3988));
     }
 }
