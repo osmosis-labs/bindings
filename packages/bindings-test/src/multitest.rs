@@ -10,7 +10,7 @@ use thiserror::Error;
 use cosmwasm_std::testing::{MockApi, MockStorage};
 use cosmwasm_std::{
     coins, to_binary, Addr, Api, BankMsg, Binary, BlockInfo, Coin, CustomQuery, Decimal, Empty,
-    Isqrt, Querier, QuerierResult, StdError, StdResult, Storage, Uint128,
+    Fraction, Isqrt, Querier, QuerierResult, StdError, StdResult, Storage, Uint128,
 };
 use cw_multi_test::{
     App, AppResponse, BankKeeper, BankSudo, BasicAppBuilder, CosmosRouter, Module, WasmKeeper,
@@ -104,11 +104,18 @@ impl Pool {
                 (final_in, final_out, payout)
             }
             SwapAmount::Out(output) => {
-                let output_minus_fee = output * (Decimal::one() - self.fee);
-                let final_in = bal_in * bal_out / (bal_out + output_minus_fee);
-                let payout = SwapAmount::In(bal_in - final_in);
+                let in_without_fee = bal_in * bal_out / (bal_out - output);
+                // add one to handle rounding (final_in - old_in) / (1 - fee)
+                let mult = Decimal::one() - self.fee;
+                // Use this as Uint128 / Decimal is not implemented in cosmwasm_std
+                let pay_incl_fee = (in_without_fee - bal_in) * mult.denominator()
+                    / mult.numerator()
+                    + Uint128::new(1);
+
+                let payin = SwapAmount::In(pay_incl_fee);
+                let final_in = bal_in + pay_incl_fee;
                 let final_out = bal_out + output;
-                (final_in, final_out, payout)
+                (final_in, final_out, payin)
             }
         };
         // update internal balance
@@ -472,5 +479,42 @@ mod tests {
         let SpotPriceResponse { price } = app.wrap().query(&query.into()).unwrap();
         // 4.00 * (1- 0.3%) = 4 * 0.997 = 3.988
         assert_eq!(price, Decimal::permille(3988));
+    }
+
+    #[test]
+    fn estimate_swap() {
+        let coin_a = coin(6_000_000u128, "osmo");
+        let coin_b = coin(1_500_000u128, "atom");
+        let pool_id = 43;
+        let pool = Pool::new(coin_a.clone(), coin_b.clone());
+
+        // set up with one pool
+        let mut app = OsmosisApp::new();
+        app.init_modules(|router, _, storage| {
+            router.custom.set_pool(storage, pool_id, &pool).unwrap();
+        });
+
+        // estimate the price (501505 * 0.997 = 500_000) after fees gone
+        let query = OsmosisQuery::estimate_price(
+            pool_id,
+            &coin_b.denom,
+            &coin_a.denom,
+            SwapAmount::In(Uint128::new(501505)),
+        );
+        let EstimatePriceResponse { amount } = app.wrap().query(&query.into()).unwrap();
+        // 6M * 1.5M = 2M * 4.5M -> output = 1.5M
+        let expected = SwapAmount::Out(Uint128::new(1_500_000));
+        assert_eq!(amount, expected);
+
+        // now try the reverse query. we know what we need to pay to get 1.5M out
+        let query = OsmosisQuery::estimate_price(
+            pool_id,
+            &coin_b.denom,
+            &coin_a.denom,
+            SwapAmount::Out(Uint128::new(1500000)),
+        );
+        let EstimatePriceResponse { amount } = app.wrap().query(&query.into()).unwrap();
+        let expected = SwapAmount::In(Uint128::new(501505));
+        assert_eq!(amount, expected);
     }
 }
