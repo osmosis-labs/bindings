@@ -114,7 +114,7 @@ impl Pool {
 
                 let payin = SwapAmount::In(pay_incl_fee);
                 let final_in = bal_in + pay_incl_fee;
-                let final_out = bal_out + output;
+                let final_out = bal_out - output;
                 (final_in, final_out, payin)
             }
         };
@@ -516,5 +516,70 @@ mod tests {
         let EstimatePriceResponse { amount } = app.wrap().query(&query.into()).unwrap();
         let expected = SwapAmount::In(Uint128::new(501505));
         assert_eq!(amount, expected);
+    }
+
+    #[test]
+    fn perform_swap() {
+        let coin_a = coin(6_000_000u128, "osmo");
+        let coin_b = coin(1_500_000u128, "atom");
+        let pool_id = 43;
+        let pool = Pool::new(coin_a.clone(), coin_b.clone());
+        let trader = Addr::unchecked("trader");
+
+        // set up with one pool
+        let mut app = OsmosisApp::new();
+        app.init_modules(|router, _, storage| {
+            router.custom.set_pool(storage, pool_id, &pool).unwrap();
+            router
+                .bank
+                .init_balance(storage, &trader, coins(800_000, &coin_b.denom))
+                .unwrap()
+        });
+
+        // check balance before
+        let Coin { amount, .. } = app.wrap().query_balance(&trader, &coin_a.denom).unwrap();
+        assert_eq!(amount, Uint128::new(0));
+        let Coin { amount, .. } = app.wrap().query_balance(&trader, &coin_b.denom).unwrap();
+        assert_eq!(amount, Uint128::new(800_000));
+
+        // this is too low a payment, will error
+        let msg = OsmosisMsg::simple_swap(
+            pool_id,
+            &coin_b.denom,
+            &coin_a.denom,
+            SwapAmountWithLimit::ExactOut {
+                output: Uint128::new(1_500_000),
+                max_input: Uint128::new(400_000),
+            },
+        );
+        let err = app.execute(trader.clone(), msg.into()).unwrap_err();
+        println!("{:?}", err);
+
+        // now a proper swap
+        let msg = OsmosisMsg::simple_swap(
+            pool_id,
+            &coin_b.denom,
+            &coin_a.denom,
+            SwapAmountWithLimit::ExactOut {
+                output: Uint128::new(1_500_000),
+                max_input: Uint128::new(600_000),
+            },
+        );
+        app.execute(trader.clone(), msg.into()).unwrap();
+
+        // update balances (800_000 - 501_505 paid = 298_495)
+        let Coin { amount, .. } = app.wrap().query_balance(&trader, &coin_a.denom).unwrap();
+        assert_eq!(amount, Uint128::new(1_500_000));
+        let Coin { amount, .. } = app.wrap().query_balance(&trader, &coin_b.denom).unwrap();
+        assert_eq!(amount, Uint128::new(298_495));
+
+        // check pool state properly updated with fees
+        let query = OsmosisQuery::PoolState { id: pool_id }.into();
+        let state: PoolStateResponse = app.wrap().query(&query).unwrap();
+        let expected_assets = vec![
+            coin(4_500_000, &coin_a.denom),
+            coin(2_001_505, &coin_b.denom),
+        ];
+        assert_eq!(state.assets, expected_assets);
     }
 }
