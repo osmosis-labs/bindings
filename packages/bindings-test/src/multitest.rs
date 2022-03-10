@@ -1,7 +1,7 @@
 use anyhow::{bail, Result as AnyResult};
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
-// use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::cmp::max;
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
@@ -9,15 +9,137 @@ use thiserror::Error;
 
 use cosmwasm_std::testing::{MockApi, MockStorage};
 use cosmwasm_std::{
-    to_binary, Addr, Api, Binary, BlockInfo, Coin, CustomQuery, Empty, Querier, QuerierResult,
-    StdError, Storage,
+    coins, to_binary, Addr, Api, BankMsg, Binary, BlockInfo, Coin, CustomQuery, Decimal, Empty,
+    Fraction, Isqrt, Querier, QuerierResult, StdError, StdResult, Storage, Uint128,
 };
 use cw_multi_test::{
     App, AppResponse, BankKeeper, BankSudo, BasicAppBuilder, CosmosRouter, Module, WasmKeeper,
 };
-// use cw_storage_plus::{Item, Map};
+use cw_storage_plus::Map;
 
-use osmo_bindings::{FullDenomResponse, OsmosisMsg, OsmosisQuery};
+use osmo_bindings::{
+    EstimatePriceResponse, FullDenomResponse, OsmosisMsg, OsmosisQuery, PoolStateResponse,
+    SpotPriceResponse, SwapAmount, SwapAmountWithLimit,
+};
+
+pub const POOLS: Map<u64, Pool> = Map::new("pools");
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct Pool {
+    pub assets: Vec<Coin>,
+    pub shares: Uint128,
+    pub fee: Decimal,
+}
+
+impl Pool {
+    // make an equal-weighted uniswap-like pool with 0.3% fees
+    pub fn new(a: Coin, b: Coin) -> Self {
+        let shares = (a.amount * b.amount).isqrt();
+        Pool {
+            assets: vec![a, b],
+            shares,
+            fee: Decimal::permille(3),
+        }
+    }
+
+    pub fn has_denom(&self, denom: &str) -> bool {
+        self.assets.iter().any(|c| c.denom == denom)
+    }
+
+    pub fn get_amount(&self, denom: &str) -> Option<Uint128> {
+        self.assets
+            .iter()
+            .find(|c| c.denom == denom)
+            .map(|c| c.amount)
+    }
+
+    pub fn set_amount(&mut self, denom: &str, amount: Uint128) -> Result<(), OsmosisError> {
+        let pos = self
+            .assets
+            .iter()
+            .position(|c| c.denom == denom)
+            .ok_or(OsmosisError::AssetNotInPool)?;
+        self.assets[pos].amount = amount;
+        Ok(())
+    }
+
+    pub fn spot_price(
+        &self,
+        denom_in: &str,
+        denom_out: &str,
+        with_swap_fee: bool,
+    ) -> Result<Decimal, OsmosisError> {
+        // ensure they have both assets
+        let (bal_in, bal_out) = match (self.get_amount(denom_in), self.get_amount(denom_out)) {
+            (Some(a), Some(b)) => (a, b),
+            _ => return Err(OsmosisError::AssetNotInPool),
+        };
+        let mult = if with_swap_fee {
+            Decimal::one() - self.fee
+        } else {
+            Decimal::one()
+        };
+        let price = Decimal::from_ratio(bal_out * mult, bal_in);
+        Ok(price)
+    }
+
+    pub fn swap(
+        &mut self,
+        denom_in: &str,
+        denom_out: &str,
+        amount: SwapAmount,
+    ) -> Result<SwapAmount, OsmosisError> {
+        // ensure they have both assets
+        let (bal_in, bal_out) = match (self.get_amount(denom_in), self.get_amount(denom_out)) {
+            (Some(a), Some(b)) => (a, b),
+            _ => return Err(OsmosisError::AssetNotInPool),
+        };
+        // do calculations (in * out = k) equation
+        let (final_in, final_out, payout) = match amount {
+            SwapAmount::In(input) => {
+                let input_minus_fee = input * (Decimal::one() - self.fee);
+                let final_out = bal_in * bal_out / (bal_in + input_minus_fee);
+                let payout = SwapAmount::Out(bal_out - final_out);
+                let final_in = bal_in + input;
+                (final_in, final_out, payout)
+            }
+            SwapAmount::Out(output) => {
+                let in_without_fee = bal_in * bal_out / (bal_out - output);
+                // add one to handle rounding (final_in - old_in) / (1 - fee)
+                let mult = Decimal::one() - self.fee;
+                // Use this as Uint128 / Decimal is not implemented in cosmwasm_std
+                let pay_incl_fee = (in_without_fee - bal_in) * mult.denominator()
+                    / mult.numerator()
+                    + Uint128::new(1);
+
+                let payin = SwapAmount::In(pay_incl_fee);
+                let final_in = bal_in + pay_incl_fee;
+                let final_out = bal_out - output;
+                (final_in, final_out, payin)
+            }
+        };
+        // update internal balance
+        self.set_amount(denom_in, final_in)?;
+        self.set_amount(denom_out, final_out)?;
+        Ok(payout)
+    }
+
+    pub fn gamm_denom(&self, pool_id: u64) -> String {
+        // see https://github.com/osmosis-labs/osmosis/blob/e13cddc698a121dce2f8919b2a0f6a743f4082d6/x/gamm/types/key.go#L52-L54
+        format!("gamm/pool/{}", pool_id)
+    }
+
+    pub fn into_response(self, pool_id: u64) -> PoolStateResponse {
+        let denom = self.gamm_denom(pool_id);
+        PoolStateResponse {
+            assets: self.assets,
+            shares: Coin {
+                denom,
+                amount: self.shares,
+            },
+        }
+    }
+}
 
 pub struct OsmosisModule {}
 
@@ -29,6 +151,11 @@ impl OsmosisModule {
     fn build_denom(&self, contract: &Addr, subdenom: &str) -> String {
         // TODO: validation assertion on subdenom
         format!("cw/{}/{}", contract, subdenom)
+    }
+
+    /// Used to mock out the response for TgradeQuery::ValidatorVotes
+    pub fn set_pool(&self, storage: &mut dyn Storage, pool_id: u64, pool: &Pool) -> StdResult<()> {
+        POOLS.save(storage, pool_id, pool)
     }
 }
 
@@ -63,8 +190,54 @@ impl Module for OsmosisModule {
                 };
                 router.sudo(api, storage, block, mint.into())
             }
-            // TODO
-            _ => unimplemented!(),
+            OsmosisMsg::Swap {
+                first,
+                route,
+                amount,
+            } => {
+                if !route.is_empty() {
+                    return Err(OsmosisError::Unimplemented.into());
+                }
+                let mut pool = POOLS.load(storage, first.pool_id)?;
+                let (pay_in, get_out) = match amount {
+                    SwapAmountWithLimit::ExactIn { input, min_output } => {
+                        let payout = pool
+                            .swap(&first.denom_in, &first.denom_out, SwapAmount::In(input))?
+                            .as_out();
+                        if payout < min_output {
+                            Err(OsmosisError::PriceTooLow)
+                        } else {
+                            Ok((input, payout))
+                        }
+                    }
+                    SwapAmountWithLimit::ExactOut { output, max_input } => {
+                        let payin = pool
+                            .swap(&first.denom_in, &first.denom_out, SwapAmount::Out(output))?
+                            .as_in();
+                        if payin > max_input {
+                            Err(OsmosisError::PriceTooLow)
+                        } else {
+                            Ok((payin, output))
+                        }
+                    }
+                }?;
+                // save updated pool state
+                POOLS.save(storage, first.pool_id, &pool)?;
+
+                // Note: to make testing easier, we just mint and burn - no balance for AMM
+                // burn pay_in tokens from sender
+                let burn = BankMsg::Burn {
+                    amount: coins(pay_in.u128(), &first.denom_in),
+                };
+                router.execute(api, storage, block, sender.clone(), burn.into())?;
+
+                // mint get_out tokens to sender
+                let mint = BankSudo::Mint {
+                    to_address: sender.to_string(),
+                    amount: coins(get_out.u128(), &first.denom_out),
+                };
+                router.sudo(api, storage, block, mint.into())
+            }
         }
     }
 
@@ -86,7 +259,7 @@ impl Module for OsmosisModule {
     fn query(
         &self,
         api: &dyn Api,
-        _storage: &dyn Storage,
+        storage: &dyn Storage,
         _querier: &dyn Querier,
         _block: &BlockInfo,
         request: OsmosisQuery,
@@ -98,8 +271,31 @@ impl Module for OsmosisModule {
                 let res = FullDenomResponse { denom };
                 Ok(to_binary(&res)?)
             }
-            // TODO
-            _ => unimplemented!(),
+            OsmosisQuery::PoolState { id } => {
+                let pool = POOLS.load(storage, id)?;
+                let res = pool.into_response(id);
+                Ok(to_binary(&res)?)
+            }
+            OsmosisQuery::SpotPrice {
+                swap,
+                with_swap_fee,
+            } => {
+                let pool = POOLS.load(storage, swap.pool_id)?;
+                let price = pool.spot_price(&swap.denom_in, &swap.denom_out, with_swap_fee)?;
+                Ok(to_binary(&SpotPriceResponse { price })?)
+            }
+            OsmosisQuery::EstimatePrice {
+                first,
+                route,
+                amount,
+            } => {
+                if !route.is_empty() {
+                    return Err(OsmosisError::Unimplemented.into());
+                }
+                let mut pool = POOLS.load(storage, first.pool_id)?;
+                let amount = pool.swap(&first.denom_in, &first.denom_out, amount)?;
+                Ok(to_binary(&EstimatePriceResponse { amount })?)
+            }
         }
     }
 }
@@ -109,8 +305,15 @@ pub enum OsmosisError {
     #[error("{0}")]
     Std(#[from] StdError),
 
-    #[error("Unauthorized: {0}")]
-    Unauthorized(String),
+    #[error("Asset not in pool")]
+    AssetNotInPool,
+
+    #[error("Price under minimum requested, aborting swap")]
+    PriceTooLow,
+
+    /// Remove this to let the compiler find all TODOs
+    #[error("Not yet implemented (TODO)")]
+    Unimplemented,
 }
 
 pub type OsmosisAppWrapped =
@@ -187,8 +390,9 @@ impl OsmosisApp {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cosmwasm_std::Uint128;
+    use cosmwasm_std::{coin, Uint128};
     use cw_multi_test::Executor;
+    use osmo_bindings::Swap;
 
     #[test]
     fn mint_token() {
@@ -235,5 +439,147 @@ mod tests {
         // but no minting of unprefixed version
         let empty = app.wrap().query_balance(rcpt.as_str(), subdenom).unwrap();
         assert_eq!(empty.amount, Uint128::zero());
+    }
+
+    #[test]
+    fn query_pool() {
+        let coin_a = coin(6_000_000u128, "osmo");
+        let coin_b = coin(1_500_000u128, "atom");
+        let pool_id = 43;
+        let pool = Pool::new(coin_a.clone(), coin_b.clone());
+
+        // set up with one pool
+        let mut app = OsmosisApp::new();
+        app.init_modules(|router, _, storage| {
+            router.custom.set_pool(storage, pool_id, &pool).unwrap();
+        });
+
+        // query the pool state
+        let query = OsmosisQuery::PoolState { id: pool_id }.into();
+        let state: PoolStateResponse = app.wrap().query(&query).unwrap();
+        let expected_shares = coin(3_000_000, "gamm/pool/43");
+        assert_eq!(state.shares, expected_shares);
+        assert_eq!(state.assets, vec![coin_a.clone(), coin_b.clone()]);
+
+        // check spot price both directions
+        let query = OsmosisQuery::spot_price(pool_id, &coin_a.denom, &coin_b.denom).into();
+        let SpotPriceResponse { price } = app.wrap().query(&query).unwrap();
+        assert_eq!(price, Decimal::percent(25));
+
+        // and atom -> osmo
+        let query = OsmosisQuery::spot_price(pool_id, &coin_b.denom, &coin_a.denom).into();
+        let SpotPriceResponse { price } = app.wrap().query(&query).unwrap();
+        assert_eq!(price, Decimal::percent(400));
+
+        // with fee
+        let query = OsmosisQuery::SpotPrice {
+            swap: Swap::new(pool_id, &coin_b.denom, &coin_a.denom),
+            with_swap_fee: true,
+        };
+        let SpotPriceResponse { price } = app.wrap().query(&query.into()).unwrap();
+        // 4.00 * (1- 0.3%) = 4 * 0.997 = 3.988
+        assert_eq!(price, Decimal::permille(3988));
+    }
+
+    #[test]
+    fn estimate_swap() {
+        let coin_a = coin(6_000_000u128, "osmo");
+        let coin_b = coin(1_500_000u128, "atom");
+        let pool_id = 43;
+        let pool = Pool::new(coin_a.clone(), coin_b.clone());
+
+        // set up with one pool
+        let mut app = OsmosisApp::new();
+        app.init_modules(|router, _, storage| {
+            router.custom.set_pool(storage, pool_id, &pool).unwrap();
+        });
+
+        // estimate the price (501505 * 0.997 = 500_000) after fees gone
+        let query = OsmosisQuery::estimate_price(
+            pool_id,
+            &coin_b.denom,
+            &coin_a.denom,
+            SwapAmount::In(Uint128::new(501505)),
+        );
+        let EstimatePriceResponse { amount } = app.wrap().query(&query.into()).unwrap();
+        // 6M * 1.5M = 2M * 4.5M -> output = 1.5M
+        let expected = SwapAmount::Out(Uint128::new(1_500_000));
+        assert_eq!(amount, expected);
+
+        // now try the reverse query. we know what we need to pay to get 1.5M out
+        let query = OsmosisQuery::estimate_price(
+            pool_id,
+            &coin_b.denom,
+            &coin_a.denom,
+            SwapAmount::Out(Uint128::new(1500000)),
+        );
+        let EstimatePriceResponse { amount } = app.wrap().query(&query.into()).unwrap();
+        let expected = SwapAmount::In(Uint128::new(501505));
+        assert_eq!(amount, expected);
+    }
+
+    #[test]
+    fn perform_swap() {
+        let coin_a = coin(6_000_000u128, "osmo");
+        let coin_b = coin(1_500_000u128, "atom");
+        let pool_id = 43;
+        let pool = Pool::new(coin_a.clone(), coin_b.clone());
+        let trader = Addr::unchecked("trader");
+
+        // set up with one pool
+        let mut app = OsmosisApp::new();
+        app.init_modules(|router, _, storage| {
+            router.custom.set_pool(storage, pool_id, &pool).unwrap();
+            router
+                .bank
+                .init_balance(storage, &trader, coins(800_000, &coin_b.denom))
+                .unwrap()
+        });
+
+        // check balance before
+        let Coin { amount, .. } = app.wrap().query_balance(&trader, &coin_a.denom).unwrap();
+        assert_eq!(amount, Uint128::new(0));
+        let Coin { amount, .. } = app.wrap().query_balance(&trader, &coin_b.denom).unwrap();
+        assert_eq!(amount, Uint128::new(800_000));
+
+        // this is too low a payment, will error
+        let msg = OsmosisMsg::simple_swap(
+            pool_id,
+            &coin_b.denom,
+            &coin_a.denom,
+            SwapAmountWithLimit::ExactOut {
+                output: Uint128::new(1_500_000),
+                max_input: Uint128::new(400_000),
+            },
+        );
+        let err = app.execute(trader.clone(), msg.into()).unwrap_err();
+        println!("{:?}", err);
+
+        // now a proper swap
+        let msg = OsmosisMsg::simple_swap(
+            pool_id,
+            &coin_b.denom,
+            &coin_a.denom,
+            SwapAmountWithLimit::ExactOut {
+                output: Uint128::new(1_500_000),
+                max_input: Uint128::new(600_000),
+            },
+        );
+        app.execute(trader.clone(), msg.into()).unwrap();
+
+        // update balances (800_000 - 501_505 paid = 298_495)
+        let Coin { amount, .. } = app.wrap().query_balance(&trader, &coin_a.denom).unwrap();
+        assert_eq!(amount, Uint128::new(1_500_000));
+        let Coin { amount, .. } = app.wrap().query_balance(&trader, &coin_b.denom).unwrap();
+        assert_eq!(amount, Uint128::new(298_495));
+
+        // check pool state properly updated with fees
+        let query = OsmosisQuery::PoolState { id: pool_id }.into();
+        let state: PoolStateResponse = app.wrap().query(&query).unwrap();
+        let expected_assets = vec![
+            coin(4_500_000, &coin_a.denom),
+            coin(2_001_505, &coin_b.denom),
+        ];
+        assert_eq!(state.assets, expected_assets);
     }
 }

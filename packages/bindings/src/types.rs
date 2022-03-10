@@ -42,6 +42,22 @@ pub enum SwapAmount {
     Out(Uint128),
 }
 
+impl SwapAmount {
+    pub fn as_in(&self) -> Uint128 {
+        match self {
+            SwapAmount::In(x) => *x,
+            _ => panic!("was output"),
+        }
+    }
+
+    pub fn as_out(&self) -> Uint128 {
+        match self {
+            SwapAmount::Out(x) => *x,
+            _ => panic!("was input"),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum SwapAmountWithLimit {

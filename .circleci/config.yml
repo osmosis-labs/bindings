@@ -5,6 +5,7 @@ workflows:
     jobs:
 #      - contract_xyz
       - package_bindings
+      - package_bindings_test
   build:
     jobs:
       - lint
@@ -78,6 +79,32 @@ jobs:
             - /usr/local/cargo/registry
             - target
           key: cargocache-v2-bindings:1.57.0-{{ checksum "~/project/Cargo.lock" }}
+
+
+  package_bindings_test:
+    docker:
+      - image: rust:1.57.0
+    working_directory: ~/project/packages/bindings-test
+    steps:
+      - checkout:
+          path: ~/project
+      - run:
+          name: Version information
+          command: rustc --version; cargo --version; rustup --version; rustup target list --installed
+      - restore_cache:
+          keys:
+            - cargocache-v2-bindings-test:1.57.0-{{ checksum "~/project/Cargo.lock" }}
+      - run:
+          name: Build library for native target
+          command: cargo build --locked
+      - run:
+          name: Run unit tests
+          command: cargo test --locked
+      - save_cache:
+          paths:
+            - /usr/local/cargo/registry
+            - target
+          key: cargocache-v2-bindings-test:1.57.0-{{ checksum "~/project/Cargo.lock" }}
 
   lint:
     docker:
