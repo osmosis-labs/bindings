@@ -1,7 +1,7 @@
 use anyhow::{bail, Result as AnyResult};
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
-// use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::cmp::max;
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
@@ -9,15 +9,65 @@ use thiserror::Error;
 
 use cosmwasm_std::testing::{MockApi, MockStorage};
 use cosmwasm_std::{
-    to_binary, Addr, Api, Binary, BlockInfo, Coin, CustomQuery, Empty, Querier, QuerierResult,
-    StdError, Storage,
+    to_binary, Addr, Api, Binary, BlockInfo, Coin, CustomQuery, Decimal, Empty, Isqrt, Querier,
+    QuerierResult, StdError, StdResult, Storage, Uint128,
 };
 use cw_multi_test::{
     App, AppResponse, BankKeeper, BankSudo, BasicAppBuilder, CosmosRouter, Module, WasmKeeper,
 };
-// use cw_storage_plus::{Item, Map};
+use cw_storage_plus::Map;
 
-use osmo_bindings::{FullDenomResponse, OsmosisMsg, OsmosisQuery};
+use osmo_bindings::{
+    FullDenomResponse, OsmosisMsg, OsmosisQuery, PoolStateResponse, SpotPriceResponse,
+};
+
+pub const POOLS: Map<u64, Pool> = Map::new("pools");
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct Pool {
+    pub assets: Vec<Coin>,
+    pub shares: Uint128,
+    pub fee: Decimal,
+}
+
+impl Pool {
+    // make an equal-weighted uniswap-like pool with 0.3% fees
+    pub fn new(a: Coin, b: Coin) -> Self {
+        let shares = (a.amount * b.amount).isqrt();
+        Pool {
+            assets: vec![a, b],
+            shares,
+            fee: Decimal::permille(3),
+        }
+    }
+
+    pub fn has_denom(&self, denom: &str) -> bool {
+        self.assets.iter().any(|c| c.denom == denom)
+    }
+
+    pub fn get_amount(&self, denom: &str) -> Option<Uint128> {
+        self.assets
+            .iter()
+            .find(|c| c.denom == denom)
+            .map(|c| c.amount)
+    }
+
+    pub fn gamm_denom(&self, pool_id: u64) -> String {
+        // see https://github.com/osmosis-labs/osmosis/blob/e13cddc698a121dce2f8919b2a0f6a743f4082d6/x/gamm/types/key.go#L52-L54
+        format!("gamm/pool/{}", pool_id)
+    }
+
+    pub fn into_response(self, pool_id: u64) -> PoolStateResponse {
+        let denom = self.gamm_denom(pool_id);
+        PoolStateResponse {
+            assets: self.assets,
+            shares: Coin {
+                denom,
+                amount: self.shares,
+            },
+        }
+    }
+}
 
 pub struct OsmosisModule {}
 
@@ -29,6 +79,11 @@ impl OsmosisModule {
     fn build_denom(&self, contract: &Addr, subdenom: &str) -> String {
         // TODO: validation assertion on subdenom
         format!("cw/{}/{}", contract, subdenom)
+    }
+
+    /// Used to mock out the response for TgradeQuery::ValidatorVotes
+    pub fn set_pool(&self, storage: &mut dyn Storage, pool_id: u64, pool: Pool) -> StdResult<()> {
+        POOLS.save(storage, pool_id, &pool)
     }
 }
 
@@ -86,7 +141,7 @@ impl Module for OsmosisModule {
     fn query(
         &self,
         api: &dyn Api,
-        _storage: &dyn Storage,
+        storage: &dyn Storage,
         _querier: &dyn Querier,
         _block: &BlockInfo,
         request: OsmosisQuery,
@@ -97,6 +152,34 @@ impl Module for OsmosisModule {
                 let denom = self.build_denom(&contract, &subdenom);
                 let res = FullDenomResponse { denom };
                 Ok(to_binary(&res)?)
+            }
+            OsmosisQuery::PoolState { id } => {
+                let pool = POOLS.load(storage, id)?;
+                let res = pool.into_response(id);
+                Ok(to_binary(&res)?)
+            }
+            OsmosisQuery::SpotPrice {
+                swap,
+                with_swap_fee,
+            } => {
+                let pool = POOLS.load(storage, swap.pool_id)?;
+                // ensure they have both assets
+                let price = match (
+                    pool.get_amount(&swap.denom_in),
+                    pool.get_amount(&swap.denom_out),
+                ) {
+                    (Some(a), Some(mut b)) => {
+                        if with_swap_fee {
+                            b = b * (Decimal::one() - pool.fee)
+                        }
+                        Decimal::from_ratio(b, a)
+                    }
+                    _ => {
+                        // TODO: custom error types
+                        panic!("Wrong asset types");
+                    }
+                };
+                Ok(to_binary(&SpotPriceResponse { price })?)
             }
             // TODO
             _ => unimplemented!(),
