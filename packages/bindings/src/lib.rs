@@ -2,7 +2,9 @@ mod msg;
 mod query;
 
 pub use msg::OsmosisMsg;
-pub use query::{FullDenomResponse, OsmosisQuery};
+pub use query::{
+    FullDenomResponse, OsmosisQuery, PoolStateResponse, SpotPriceResponse, Step, Swap, SwapAmount,
+};
 
 // This is a signal, such that any contract that imports these helpers will only run on the
 // osmosis blockchain
