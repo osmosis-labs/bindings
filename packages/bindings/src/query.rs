@@ -1,6 +1,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use crate::types::{Step, Swap, SwapAmount};
 use cosmwasm_std::{Coin, CustomQuery, Decimal, Uint128};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
@@ -26,27 +27,31 @@ pub enum OsmosisQuery {
     },
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
-pub struct Swap {
-    pub pool_id: u64,
-    pub input: String,
-    pub output: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
-pub struct Step {
-    pub pool_id: u64,
-    pub output: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
-#[serde(rename_all = "snake_case")]
-pub enum SwapAmount {
-    Input(Uint128),
-    Output(Uint128),
-}
-
 impl CustomQuery for OsmosisQuery {}
+
+impl OsmosisQuery {
+    /// Calculate spot price without swap fee
+    pub fn spot_price(pool_id: u64, denom_in: &str, denom_out: &str) -> Self {
+        OsmosisQuery::SpotPrice {
+            swap: Swap::new(pool_id, denom_in, denom_out),
+            with_swap_fee: false,
+        }
+    }
+
+    /// Basic helper to estimate price of a swap on one pool
+    pub fn estimate_price(
+        pool_id: u64,
+        denom_in: impl Into<String>,
+        denom_out: impl Into<String>,
+        amount: SwapAmount,
+    ) -> Self {
+        OsmosisQuery::EstimatePrice {
+            first: Swap::new(pool_id, denom_in, denom_out),
+            amount,
+            route: vec![],
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 pub struct FullDenomResponse {
