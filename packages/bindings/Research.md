@@ -2,16 +2,69 @@
 
 ## GAMM Queries
 
-### Provided Info
-
-Four main areas:
+### Pool Info
 
 * [PoolParams](https://github.com/osmosis-labs/osmosis/blob/v7.0.3/proto/osmosis/gamm/v1beta1/query.proto#L28-L35)
-* [Assets and SpotPrice](https://github.com/osmosis-labs/osmosis/blob/v7.0.3/proto/osmosis/gamm/v1beta1/query.proto#L41-L48)
-* [EstimateSwap](https://github.com/osmosis-labs/osmosis/blob/v7.0.3/proto/osmosis/gamm/v1beta1/query.proto#L50-L60)
 * [Pools](https://github.com/osmosis-labs/osmosis/blob/main/proto/osmosis/gamm/v1beta1/query.proto#L17-L19)
 
-SpotPrice requires knowing the PoolID:
+Querying Pool or Pools, returns `google.protobuf.Any`, which is hard to turn into Rust.
+However, we can define an `enum` that captures all currently supported examples, currently only balancer pool.
+Looking into the [details of balancer pool](https://github.com/osmosis-labs/osmosis/blob/main/proto/osmosis/gamm/pool-models/balancer/balancerPool.proto#L92-L133)
+The interest is mainly in `uint64 id = 2;` (if listing) and `repeated osmosis.gamm.v1beta1.PoolAsset poolAssets = 6` to reflect what is in the pool.
+
+There are 1000s of pools, many unused. There is no reasonable way to list over all Pools in contracts.
+What we can currently do is extract the [Pool ID from the LP token denom](https://github.com/osmosis-labs/osmosis/blob/e13cddc698a121dce2f8919b2a0f6a743f4082d6/x/gamm/types/key.go#L52-L54)
+Osmosis may add a lookup from a denom to a list of all incentivized pools where that denom is traded, which could be a first step to routing.
+
+### Pool State
+
+[PoolAsset](https://github.com/osmosis-labs/osmosis/blob/main/proto/osmosis/gamm/v1beta1/pool.proto#L10-L30) contains a Coin
+and a weight, and can be [directly queried from any pool id](https://github.com/osmosis-labs/osmosis/blob/main/proto/osmosis/gamm/v1beta1/query.proto#L108-L113)
+This will let us know both what tokens can be traded on the pool, as well as the current liquidity.
+
+We can also [query total shares](https://github.com/osmosis-labs/osmosis/blob/main/proto/osmosis/gamm/v1beta1/query.proto#L97-L105)m,
+which combined with the pool assets, will let us know how many tokens are backed by each GAMM token.
+
+```proto
+message QueryTotalSharesRequest {
+  uint64 poolId = 1 [ (gogoproto.moretags) = "yaml:\"pool_id\"" ];
+}
+message QueryTotalSharesResponse {
+  cosmos.base.v1beta1.Coin totalShares = 1 [
+    (gogoproto.moretags) = "yaml:\"total_shares\"",
+    (gogoproto.nullable) = false
+  ];
+}
+
+message QueryPoolAssetsRequest {
+  uint64 poolId = 1 [ (gogoproto.moretags) = "yaml:\"pool_id\"" ];
+}
+message QueryPoolAssetsResponse {
+  repeated PoolAsset poolAssets = 1 [ (gogoproto.nullable) = false ];
+}
+
+message PoolAsset {
+  // Coins we are talking about,
+  // the denomination must be unique amongst all PoolAssets for this pool.
+  cosmos.base.v1beta1.Coin token = 1
+      [ (gogoproto.moretags) = "yaml:\"token\"", (gogoproto.nullable) = false ];
+  // Weight that is not normalized. This weight must be less than 2^50
+  string weight = 2 [
+    (gogoproto.customtype) = "github.com/cosmos/cosmos-sdk/types.Int",
+    (gogoproto.moretags) = "yaml:\"weight\"",
+    (gogoproto.nullable) = false
+  ];
+}
+```
+
+### Price Checks
+
+* [SpotPrice](https://github.com/osmosis-labs/osmosis/blob/v7.0.3/proto/osmosis/gamm/v1beta1/query.proto#L45-L48)
+* [EstimateSwap](https://github.com/osmosis-labs/osmosis/blob/v7.0.3/proto/osmosis/gamm/v1beta1/query.proto#L50-L60)
+
+SpotPrice requires knowing the PoolID and in/out tokens.
+It only allows a check for a swap on one pool, not a series:
+
 ```proto
 message QuerySpotPriceRequest {
     uint64 poolId = 1 [ (gogoproto.moretags) = "yaml:\"pool_id\"" ];
@@ -25,7 +78,11 @@ message QuerySpotPriceResponse {
 }
 ```
 
-As does Swap Estimation:
+Swap Estimation takes a list of pools to be used in the swap.
+You set either the input or output as fixed and it will estimate the return on the other side.
+You can either say "how many OSMO do I get for exactly 10 ATOM?" or
+"how many ATOM must I swap to get exactly 30 OSMO?".
+
 ```proto
 message QuerySwapExactAmountInRequest {
   string sender = 1 [ (gogoproto.moretags) = "yaml:\"sender\"" ];
@@ -37,6 +94,12 @@ message QuerySwapExactAmountInRequest {
   ];
 }
 
+message SwapAmountInRoute {
+  uint64 poolId = 1 [ (gogoproto.moretags) = "yaml:\"pool_id\"" ];
+  string tokenOutDenom = 2
+      [ (gogoproto.moretags) = "yaml:\"token_out_denom\"" ];
+}
+
 message QuerySwapExactAmountInResponse {
   string tokenOutAmount = 1 [
     (gogoproto.customtype) = "github.com/cosmos/cosmos-sdk/types.Int",
@@ -46,36 +109,24 @@ message QuerySwapExactAmountInResponse {
 }
 ```
 
-Querying Pool or Pools, returns `google.protobuf.Any`, which is run to turn into Rust.
-However, we can define an `enum` that captures all currently supported examples, currently only balancer pool.
-Looking into the [details of balancer pool](https://github.com/osmosis-labs/osmosis/blob/main/proto/osmosis/gamm/pool-models/balancer/balancerPool.proto#L92-L133)
-The interest is mainly in `uint64 id = 2;` (if listing) and `repeated osmosis.gamm.v1beta1.PoolAsset poolAssets = 6` to reflect what is in the pool.
+An important question is how to best represent these routes in Rust types.
 
-[PoolAsset](https://github.com/osmosis-labs/osmosis/blob/main/proto/osmosis/gamm/v1beta1/pool.proto#L10-L30) contains a Coin
-and a weight, and can be [directly queried from any pool id](https://github.com/osmosis-labs/osmosis/blob/main/proto/osmosis/gamm/v1beta1/query.proto#L108-L113)
+It is effectively on of these...
 
-### To expose
+* `A -(P1)-> B`
+* `A -(P1)-> B -(P2)-> C`
+* `A -(P1)-> B -(P2)-> C -(P3)-> D`
 
-We may wish to eventually provide a way to paginate over all Pools and get their info, to implement some sort of Router.
-However, for the original version, we can require the caller to know the pool id(s) that are of interest. Given
-those ids, the contracts will want access to the following info:
+Should that be:
+* Input + N (pool + output) Where N >=1 is enforced runtime?
+* Define first swap and then an optional list of chains? (type safety that we cannot add N == 0)
 
-Pool State:
-* Current liquidity - list all coins in the pool (denom and amount)
-* GAMM shares? - total number and denom
+### To be defined
 
-Estimate Immediate Trades:
-* Spot Price (x A -> B on pool P)
-* Estimate In (N A -> x B on pool P)
-* Estimate Out (x A -> N B on pool P)
+Price Oracle needs **TWAP** `(A -> B on Pool P)` over last hour/day/etc.
+Some simple version will be included in Osmosis 8.0.
 
-Price Oracle:
-* TWAP (A -> B on Pool P)
-
-### Future ideas
-
-* List all pools
-* Find pool given GAMM denom
+Integration to be defined
 
 ## GAMM Messages
 

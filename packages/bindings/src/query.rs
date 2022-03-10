@@ -6,7 +6,7 @@ use cosmwasm_std::CustomQuery;
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum OsmosisQuery {
-    /// Given a subdenom minted by this contract via `OsmosisMsg::MintTokens`,
+    /// Given a subdenom minted by a contract via `OsmosisMsg::MintTokens`,
     /// returns the full denom as used by `BankMsg::Send`
     FullDenom { subdenom: String },
 }
