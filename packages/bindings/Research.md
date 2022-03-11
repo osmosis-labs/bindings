@@ -121,6 +121,9 @@ Should that be:
 * Input + N (pool + output) Where N >= 1 is enforced runtime?
 * Define first swap and then an optional list of chains? (type safety that we cannot add N == 0)
 
+**Note**: The first element is currently being enforced at the structs level. See [EstimatePrice](./src/query.rs)
+and [Swap](./src/msg.rs).
+
 ### To be defined
 
 Price Oracle needs **TWAP** `(A -> B on Pool P)` over last hour/day/etc.
