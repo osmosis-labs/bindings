@@ -10,7 +10,7 @@ pub enum OsmosisQuery {
     /// Given a subdenom minted by a contract via `OsmosisMsg::MintTokens`,
     /// returns the full denom as used by `BankMsg::Send`.
     /// You may call FullDenom{contract: env.contract.address, ..} to find the denom issued by current contract
-    FullDenom { contract: String, subdenom: String },
+    FullDenom { contract: String, sub_denom: String },
     /// For a given pool ID, list all tokens traded on it with current liquidity (spot)
     /// As well as the total number of LP shares and their denom
     PoolState { id: u64 },

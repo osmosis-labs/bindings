@@ -148,9 +148,9 @@ pub struct OsmosisModule {}
 pub const BLOCK_TIME: u64 = 5;
 
 impl OsmosisModule {
-    fn build_denom(&self, contract: &Addr, subdenom: &str) -> String {
-        // TODO: validation assertion on subdenom
-        format!("cw/{}/{}", contract, subdenom)
+    fn build_denom(&self, contract: &Addr, sub_denom: &str) -> String {
+        // TODO: validation assertion on sub_denom
+        format!("cw/{}/{}", contract, sub_denom)
     }
 
     /// Used to mock out the response for TgradeQuery::ValidatorVotes
@@ -179,11 +179,11 @@ impl Module for OsmosisModule {
     {
         match msg {
             OsmosisMsg::MintTokens {
-                subdenom,
+                sub_denom,
                 amount,
                 recipient,
             } => {
-                let denom = self.build_denom(&sender, &subdenom);
+                let denom = self.build_denom(&sender, &sub_denom);
                 let mint = BankSudo::Mint {
                     to_address: recipient,
                     amount: vec![Coin { denom, amount }],
@@ -265,9 +265,12 @@ impl Module for OsmosisModule {
         request: OsmosisQuery,
     ) -> anyhow::Result<Binary> {
         match request {
-            OsmosisQuery::FullDenom { contract, subdenom } => {
+            OsmosisQuery::FullDenom {
+                contract,
+                sub_denom,
+            } => {
                 let contract = api.addr_validate(&contract)?;
-                let denom = self.build_denom(&contract, &subdenom);
+                let denom = self.build_denom(&contract, &sub_denom);
                 let res = FullDenomResponse { denom };
                 Ok(to_binary(&res)?)
             }
@@ -398,7 +401,7 @@ mod tests {
     fn mint_token() {
         let contract = Addr::unchecked("govner");
         let rcpt = Addr::unchecked("townies");
-        let subdenom = "fundz";
+        let sub_denom = "fundz";
 
         let mut app = OsmosisApp::new();
 
@@ -412,18 +415,18 @@ mod tests {
             .query(
                 &OsmosisQuery::FullDenom {
                     contract: contract.to_string(),
-                    subdenom: subdenom.to_string(),
+                    sub_denom: sub_denom.to_string(),
                 }
                 .into(),
             )
             .unwrap();
-        assert_ne!(denom, subdenom);
+        assert_ne!(denom, sub_denom);
         assert!(denom.len() > 10);
 
         // prepare to mint
         let amount = Uint128::new(1234567);
         let msg = OsmosisMsg::MintTokens {
-            subdenom: subdenom.to_string(),
+            sub_denom: sub_denom.to_string(),
             amount,
             recipient: rcpt.to_string(),
         };
@@ -437,7 +440,7 @@ mod tests {
         assert_eq!(end, expected);
 
         // but no minting of unprefixed version
-        let empty = app.wrap().query_balance(rcpt.as_str(), subdenom).unwrap();
+        let empty = app.wrap().query_balance(rcpt.as_str(), sub_denom).unwrap();
         assert_eq!(empty.amount, Uint128::zero());
     }
 
