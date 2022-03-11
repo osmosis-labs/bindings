@@ -7,11 +7,12 @@ use cosmwasm_std::{Coin, CustomQuery, Decimal, Uint128};
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum OsmosisQuery {
-    /// Given a subdenom minted by a contract via `OsmosisMsg::MintTokens`,
+    /// Given a sub-denom minted by a contract via `OsmosisMsg::MintTokens`,
     /// returns the full denom as used by `BankMsg::Send`.
-    /// You may call FullDenom{contract: env.contract.address, ..} to find the denom issued by current contract
-    FullDenom { contract: String, subdenom: String },
-    /// For a given pool ID, list all tokens traded on it with current liquidity (spot)
+    /// You may call `FullDenom { contract: env.contract.address, sub_denom }` to find the denom issued
+    /// by the current contract.
+    FullDenom { contract: String, sub_denom: String },
+    /// For a given pool ID, list all tokens traded on it with current liquidity (spot).
     /// As well as the total number of LP shares and their denom
     PoolState { id: u64 },
     /// Return current spot price swapping In for Out on given pool ID.

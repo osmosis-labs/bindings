@@ -11,11 +11,11 @@ use cosmwasm_std::{CosmosMsg, CustomMsg, Uint128};
 pub enum OsmosisMsg {
     /// Contracts can mint native tokens that have an auto-generated denom
     /// namespaced under the contract's address. A contract may create any number
-    /// of independent subdenoms.
+    /// of independent sub-denoms.
     MintTokens {
         /// Must be 2-32 alphanumeric characters
         /// FIXME: revisit actual requirements in SDK
-        subdenom: String,
+        sub_denom: String,
         amount: Uint128,
         recipient: String,
     },
