@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -109,5 +107,5 @@ pub struct EstimatePriceResponse {
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 pub struct PoolsResponse {
-    pub pools: HashMap<u64, PoolStateResponse>,
+    pub pools: Vec<(u64, PoolStateResponse)>,
 }

@@ -3,7 +3,6 @@ use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::cmp::max;
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 use thiserror::Error;
@@ -304,7 +303,7 @@ impl Module for OsmosisModule {
                 let pools = POOLS
                     .range(storage, None, None, cosmwasm_std::Order::Ascending)
                     .map(|res| res.map(|(id, pool)| (id, pool.into_response(id))))
-                    .collect::<Result<HashMap<_, _>, _>>()?;
+                    .collect::<Result<Vec<_>, _>>()?;
 
                 Ok(to_binary(&PoolsResponse { pools })?)
             }
@@ -491,6 +490,53 @@ mod tests {
         let SpotPriceResponse { price } = app.wrap().query(&query.into()).unwrap();
         // 4.00 * (1- 0.3%) = 4 * 0.997 = 3.988
         assert_eq!(price, Decimal::permille(3988));
+    }
+
+    #[test]
+    fn list_pools() {
+        let coin_a = coin(6_000_000u128, "osmo");
+        let coin_b = coin(1_500_000u128, "atom");
+        let coin_c = coin(24_000_000u128, "btc");
+        let pool_id1 = 43;
+        let pool1 = Pool::new(coin_a.clone(), coin_b.clone());
+        let pool_id2 = 33;
+        let pool2 = Pool::new(coin_b.clone(), coin_c.clone());
+
+        let mut app = OsmosisApp::new();
+
+        let query = OsmosisQuery::Pools {}.into();
+        let state: PoolsResponse = app.wrap().query(&query).unwrap();
+        assert_eq!(state.pools.len(), 0);
+
+        // set up with one pool
+        app.init_modules(|router, _, storage| {
+            router.custom.set_pool(storage, pool_id1, &pool1).unwrap();
+        });
+
+        let expected_pool1 = PoolStateResponse {
+            assets: vec![coin_a, coin_b.clone()],
+            shares: coin(3_000_000, "gamm/pool/43"),
+        };
+
+        let query = OsmosisQuery::Pools {}.into();
+        let state: PoolsResponse = app.wrap().query(&query).unwrap();
+        assert_eq!(state.pools, [(pool_id1, expected_pool1.clone())]);
+
+        app.init_modules(|router, _, storage| {
+            router.custom.set_pool(storage, pool_id2, &pool2).unwrap();
+        });
+
+        let expected_pool2 = PoolStateResponse {
+            assets: vec![coin_b, coin_c],
+            shares: coin(6_000_000, "gamm/pool/33"),
+        };
+
+        let query = OsmosisQuery::Pools {}.into();
+        let state: PoolsResponse = app.wrap().query(&query).unwrap();
+        assert_eq!(
+            state.pools,
+            [(pool_id2, expected_pool2), (pool_id1, expected_pool1)]
+        );
     }
 
     #[test]
