@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -27,6 +29,8 @@ pub enum OsmosisQuery {
         route: Vec<Step>,
         amount: SwapAmount,
     },
+    /// Return a list of all existing liquidity pools.
+    Pools {},
 }
 
 impl CustomQuery for OsmosisQuery {}
@@ -101,4 +105,9 @@ pub struct EstimatePriceResponse {
     // If you query with SwapAmount::Input, this is SwapAmount::Output
     // If you query with SwapAmount::Output, this is SwapAmount::Input
     pub amount: SwapAmount,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct PoolsResponse {
+    pub pools: HashMap<u64, PoolStateResponse>,
 }

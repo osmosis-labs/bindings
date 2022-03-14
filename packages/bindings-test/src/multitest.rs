@@ -3,6 +3,7 @@ use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::cmp::max;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 use thiserror::Error;
@@ -19,7 +20,7 @@ use cw_storage_plus::Map;
 
 use osmo_bindings::{
     EstimatePriceResponse, FullDenomResponse, OsmosisMsg, OsmosisQuery, PoolStateResponse,
-    SpotPriceResponse, SwapAmount, SwapAmountWithLimit,
+    PoolsResponse, SpotPriceResponse, SwapAmount, SwapAmountWithLimit,
 };
 
 pub const POOLS: Map<u64, Pool> = Map::new("pools");
@@ -298,6 +299,14 @@ impl Module for OsmosisModule {
                 let mut pool = POOLS.load(storage, first.pool_id)?;
                 let amount = pool.swap(&first.denom_in, &first.denom_out, amount)?;
                 Ok(to_binary(&EstimatePriceResponse { amount })?)
+            }
+            OsmosisQuery::Pools {} => {
+                let pools = POOLS
+                    .range(storage, None, None, cosmwasm_std::Order::Ascending)
+                    .map(|res| res.map(|(id, pool)| (id, pool.into_response(id))))
+                    .collect::<Result<HashMap<_, _>, _>>()?;
+
+                Ok(to_binary(&PoolsResponse { pools })?)
             }
         }
     }

@@ -4,7 +4,8 @@ mod types;
 
 pub use msg::OsmosisMsg;
 pub use query::{
-    EstimatePriceResponse, FullDenomResponse, OsmosisQuery, PoolStateResponse, SpotPriceResponse,
+    EstimatePriceResponse, FullDenomResponse, OsmosisQuery, PoolStateResponse, PoolsResponse,
+    SpotPriceResponse,
 };
 pub use types::{Step, Swap, SwapAmount, SwapAmountWithLimit};
 
