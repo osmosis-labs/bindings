@@ -4,8 +4,7 @@ use std::fs::create_dir_all;
 use cosmwasm_schema::{export_schema, remove_schemas, schema_for};
 
 use osmo_reflect::msg::{
-    ChainResponse, ExecuteMsg, InstantiateMsg, OwnerResponse,
-    QueryMsg, RawResponse,
+    ChainResponse, ExecuteMsg, InstantiateMsg, OwnerResponse, QueryMsg, RawResponse,
 };
 
 fn main() {

@@ -165,16 +165,37 @@ fn query_raw(deps: Deps<OsmosisQuery>, contract: String, key: Binary) -> StdResu
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing::mock_dependencies_with_custom_querier;
-    use cosmwasm_std::testing::{mock_env, mock_info, MOCK_CONTRACT_ADDR};
-    use cosmwasm_std::{
-        coin, coins, from_binary, AllBalanceResponse, BankMsg, BankQuery, Binary, ContractResult,
-        Event, StakingMsg, StdError, SubMsgExecutionResponse,
+    use cosmwasm_std::testing::{
+        mock_env, mock_info, MockApi, MockQuerier, MockStorage, MOCK_CONTRACT_ADDR,
     };
+    use cosmwasm_std::{
+        coin, coins, from_binary, AllBalanceResponse, BankMsg, BankQuery, Binary, Coin, Event,
+        StakingMsg, StdError, SubMsgExecutionResponse, Uint128,
+    };
+    use cosmwasm_std::{OwnedDeps, SubMsgResult, SystemError};
+    use std::marker::PhantomData;
+
+    pub fn mock_dependencies(
+        contract_balance: &[Coin],
+    ) -> OwnedDeps<MockStorage, MockApi, MockQuerier<OsmosisQuery>, OsmosisQuery> {
+        let custom_querier: MockQuerier<OsmosisQuery> =
+            MockQuerier::new(&[(MOCK_CONTRACT_ADDR, contract_balance)]).with_custom_handler(|_| {
+                SystemResult::Err(SystemError::InvalidRequest {
+                    error: "not implemented".to_string(),
+                    request: Default::default(),
+                })
+            });
+        OwnedDeps {
+            storage: MockStorage::default(),
+            api: MockApi::default(),
+            querier: custom_querier,
+            custom_query_type: PhantomData,
+        }
+    }
 
     #[test]
     fn proper_instantialization() {
-        let mut deps = mock_dependencies_with_custom_querier(&[]);
+        let mut deps = mock_dependencies(&[]);
 
         let msg = InstantiateMsg {};
         let info = mock_info("creator", &coins(1000, "earth"));
@@ -190,7 +211,7 @@ mod tests {
 
     #[test]
     fn reflect() {
-        let mut deps = mock_dependencies_with_custom_querier(&[]);
+        let mut deps = mock_dependencies(&[]);
 
         let msg = InstantiateMsg {};
         let info = mock_info("creator", &coins(2, "token"));
@@ -213,7 +234,7 @@ mod tests {
 
     #[test]
     fn reflect_requires_owner() {
-        let mut deps = mock_dependencies_with_custom_querier(&[]);
+        let mut deps = mock_dependencies(&[]);
 
         let msg = InstantiateMsg {};
         let info = mock_info("creator", &coins(2, "token"));
@@ -237,7 +258,7 @@ mod tests {
 
     #[test]
     fn reflect_reject_empty_msgs() {
-        let mut deps = mock_dependencies_with_custom_querier(&[]);
+        let mut deps = mock_dependencies(&[]);
 
         let msg = InstantiateMsg {};
         let info = mock_info("creator", &coins(2, "token"));
@@ -253,7 +274,7 @@ mod tests {
 
     #[test]
     fn reflect_multiple_messages() {
-        let mut deps = mock_dependencies_with_custom_querier(&[]);
+        let mut deps = mock_dependencies(&[]);
 
         let msg = InstantiateMsg {};
         let info = mock_info("creator", &coins(2, "token"));
@@ -265,9 +286,12 @@ mod tests {
                 amount: coins(1, "token"),
             }
             .into(),
-            // make sure we can pass through custom native messages
-            OsmosisMsg::Raw(Binary(b"{\"foo\":123}".to_vec())).into(),
-            OsmosisMsg::Debug("Hi, Dad!".to_string()).into(),
+            OsmosisMsg::MintTokens {
+                sub_denom: "bonus".to_string(),
+                amount: Uint128::new(123456789),
+                recipient: "creator".to_string(),
+            }
+            .into(),
             StakingMsg::Delegate {
                 validator: String::from("validator"),
                 amount: coin(100, "ustake"),
@@ -286,7 +310,7 @@ mod tests {
 
     #[test]
     fn change_owner_works() {
-        let mut deps = mock_dependencies_with_custom_querier(&[]);
+        let mut deps = mock_dependencies(&[]);
 
         let msg = InstantiateMsg {};
         let info = mock_info("creator", &coins(2, "token"));
@@ -305,7 +329,7 @@ mod tests {
 
     #[test]
     fn change_owner_requires_current_owner_as_sender() {
-        let mut deps = mock_dependencies_with_custom_querier(&[]);
+        let mut deps = mock_dependencies(&[]);
 
         let msg = InstantiateMsg {};
         let creator = String::from("creator");
@@ -329,7 +353,7 @@ mod tests {
 
     #[test]
     fn change_owner_errors_for_invalid_new_address() {
-        let mut deps = mock_dependencies_with_custom_querier(&[]);
+        let mut deps = mock_dependencies(&[]);
         let creator = String::from("creator");
 
         let msg = InstantiateMsg {};
@@ -350,20 +374,8 @@ mod tests {
     }
 
     #[test]
-    fn capitalized_query_works() {
-        let deps = mock_dependencies_with_custom_querier(&[]);
-
-        let msg = QueryMsg::Capitalized {
-            text: "demo one".to_string(),
-        };
-        let response = query(deps.as_ref(), mock_env(), msg).unwrap();
-        let value: CapitalizedResponse = from_binary(&response).unwrap();
-        assert_eq!(value.text, "DEMO ONE");
-    }
-
-    #[test]
     fn chain_query_works() {
-        let deps = mock_dependencies_with_custom_querier(&coins(123, "ucosm"));
+        let deps = mock_dependencies(&coins(123, "ucosm"));
 
         // with bank query
         let msg = QueryMsg::Chain {
@@ -377,19 +389,20 @@ mod tests {
         let inner: AllBalanceResponse = from_binary(&outer.data).unwrap();
         assert_eq!(inner.amount, coins(123, "ucosm"));
 
-        // with custom query
-        let msg = QueryMsg::Chain {
-            request: OsmosisQuery::Ping {}.into(),
-        };
-        let response = query(deps.as_ref(), mock_env(), msg).unwrap();
-        let outer: ChainResponse = from_binary(&response).unwrap();
-        let inner: SpecialResponse = from_binary(&outer.data).unwrap();
-        assert_eq!(inner.msg, "pong");
+        // TODO? or better in multitest?
+        // // with custom query
+        // let msg = QueryMsg::Chain {
+        //     request: OsmosisQuery::Ping {}.into(),
+        // };
+        // let response = query(deps.as_ref(), mock_env(), msg).unwrap();
+        // let outer: ChainResponse = from_binary(&response).unwrap();
+        // let inner: SpecialResponse = from_binary(&outer.data).unwrap();
+        // assert_eq!(inner.msg, "pong");
     }
 
     #[test]
     fn reflect_subcall() {
-        let mut deps = mock_dependencies_with_custom_querier(&[]);
+        let mut deps = mock_dependencies(&[]);
 
         let msg = InstantiateMsg {};
         let info = mock_info("creator", &coins(2, "token"));
@@ -417,7 +430,7 @@ mod tests {
     // this mocks out what happens after reflect_subcall
     #[test]
     fn reply_and_query() {
-        let mut deps = mock_dependencies_with_custom_querier(&[]);
+        let mut deps = mock_dependencies(&[]);
 
         let msg = InstantiateMsg {};
         let info = mock_info("creator", &coins(2, "token"));
@@ -426,7 +439,7 @@ mod tests {
         let id = 123u64;
         let data = Binary::from(b"foobar");
         let events = vec![Event::new("message").add_attribute("signer", "caller-addr")];
-        let result = ContractResult::Ok(SubMsgExecutionResponse {
+        let result = SubMsgResult::Ok(SubMsgExecutionResponse {
             events: events.clone(),
             data: Some(data.clone()),
         });
