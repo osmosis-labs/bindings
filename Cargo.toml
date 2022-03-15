@@ -1,11 +1,10 @@
 [workspace]
-#members = ["packages/*", "contracts/*"]
-members = ["packages/*"]
+members = ["packages/*", "contracts/*"]
 resolver = "2"
 
-#[profile.release.package.lendex-token]
-#codegen-units = 1
-#incremental = false
+[profile.release.package.osmo-reflect]
+codegen-units = 1
+incremental = false
 
 [profile.release]
 rpath = false
