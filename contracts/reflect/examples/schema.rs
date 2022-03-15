@@ -3,9 +3,7 @@ use std::fs::create_dir_all;
 
 use cosmwasm_schema::{export_schema, remove_schemas, schema_for};
 
-use osmo_reflect::msg::{
-    ChainResponse, ExecuteMsg, InstantiateMsg, OwnerResponse, QueryMsg, RawResponse,
-};
+use osmo_reflect::msg::{ChainResponse, ExecuteMsg, InstantiateMsg, OwnerResponse, QueryMsg};
 
 fn main() {
     let mut out_dir = current_dir().unwrap();
@@ -21,5 +19,4 @@ fn main() {
     // The possible return types for QueryMsg cases
     export_schema(&schema_for!(OwnerResponse), &out_dir);
     export_schema(&schema_for!(ChainResponse), &out_dir);
-    export_schema(&schema_for!(RawResponse), &out_dir);
 }

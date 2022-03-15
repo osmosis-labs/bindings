@@ -24,11 +24,6 @@ pub enum QueryMsg {
     Chain {
         request: QueryRequest<OsmosisQuery>,
     },
-    /// Queries another contract and returns the data
-    Raw {
-        contract: String,
-        key: Binary,
-    },
     /// If there was a previous ReflectSubMsg with this ID, returns cosmwasm_std::Reply
     SubMsgResult {
         id: u64,
@@ -51,14 +46,5 @@ pub struct CapitalizedResponse {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct ChainResponse {
-    pub data: Binary,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub struct RawResponse {
-    /// The returned value of the raw query. Empty data can be the
-    /// result of a non-existent key or an empty value. We cannot
-    /// differentiate those two cases in cross contract queries.
     pub data: Binary,
 }

@@ -1,12 +1,11 @@
 use cosmwasm_std::{
-    entry_point, to_binary, to_vec, Binary, ContractResult, CosmosMsg, Deps, DepsMut, Env,
-    MessageInfo, QueryRequest, QueryResponse, Reply, Response, StdError, StdResult, SubMsg,
-    SystemResult,
+    entry_point, to_binary, to_vec, ContractResult, CosmosMsg, Deps, DepsMut, Env, MessageInfo,
+    QueryRequest, QueryResponse, Reply, Response, StdError, StdResult, SubMsg, SystemResult,
 };
 use osmo_bindings::{OsmosisMsg, OsmosisQuery};
 
 use crate::errors::ReflectError;
-use crate::msg::{ChainResponse, ExecuteMsg, InstantiateMsg, OwnerResponse, QueryMsg, RawResponse};
+use crate::msg::{ChainResponse, ExecuteMsg, InstantiateMsg, OwnerResponse, QueryMsg};
 use crate::state::{config, config_read, replies, replies_read, State};
 
 #[entry_point]
@@ -29,13 +28,13 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response<OsmosisMsg>, ReflectError> {
     match msg {
-        ExecuteMsg::ReflectMsg { msgs } => try_reflect(deps, env, info, msgs),
-        ExecuteMsg::ReflectSubMsg { msgs } => try_reflect_subcall(deps, env, info, msgs),
-        ExecuteMsg::ChangeOwner { owner } => try_change_owner(deps, env, info, owner),
+        ExecuteMsg::ReflectMsg { msgs } => execute_reflect(deps, env, info, msgs),
+        ExecuteMsg::ReflectSubMsg { msgs } => execute_reflect_subcall(deps, env, info, msgs),
+        ExecuteMsg::ChangeOwner { owner } => execute_change_owner(deps, env, info, owner),
     }
 }
 
-pub fn try_reflect(
+pub fn execute_reflect(
     deps: DepsMut<OsmosisQuery>,
     _env: Env,
     info: MessageInfo,
@@ -59,7 +58,7 @@ pub fn try_reflect(
         .add_messages(msgs))
 }
 
-pub fn try_reflect_subcall(
+pub fn execute_reflect_subcall(
     deps: DepsMut<OsmosisQuery>,
     _env: Env,
     info: MessageInfo,
@@ -82,7 +81,7 @@ pub fn try_reflect_subcall(
         .add_submessages(msgs))
 }
 
-pub fn try_change_owner(
+pub fn execute_change_owner(
     deps: DepsMut<OsmosisQuery>,
     _env: Env,
     info: MessageInfo,
@@ -117,7 +116,6 @@ pub fn query(deps: Deps<OsmosisQuery>, _env: Env, msg: QueryMsg) -> StdResult<Qu
     match msg {
         QueryMsg::Owner {} => to_binary(&query_owner(deps)?),
         QueryMsg::Chain { request } => to_binary(&query_chain(deps, &request)?),
-        QueryMsg::Raw { contract, key } => to_binary(&query_raw(deps, contract, key)?),
         QueryMsg::SubMsgResult { id } => to_binary(&query_subcall(deps, id)?),
     }
 }
@@ -153,13 +151,6 @@ fn query_chain(
         ))),
         SystemResult::Ok(ContractResult::Ok(value)) => Ok(ChainResponse { data: value }),
     }
-}
-
-fn query_raw(deps: Deps<OsmosisQuery>, contract: String, key: Binary) -> StdResult<RawResponse> {
-    let response: Option<Vec<u8>> = deps.querier.query_wasm_raw(contract, key)?;
-    Ok(RawResponse {
-        data: response.unwrap_or_default().into(),
-    })
 }
 
 #[cfg(test)]
