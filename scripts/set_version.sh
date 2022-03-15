@@ -40,12 +40,11 @@ for package_dir in packages/*/; do
   FILES_MODIFIED+=("$CARGO_TOML")
 done
 
-# TODO: uncomment when we have a contract
-#for contract_dir in contracts/*/; do
-#  CARGO_TOML="$contract_dir/Cargo.toml"
-#  sed -i -e "s/version[[:space:]]*=[[:space:]]*\"$OLD\"/version = \"$NEW\"/" "$CARGO_TOML"
-#  FILES_MODIFIED+=("$CARGO_TOML")
-#done
+for contract_dir in contracts/*/; do
+  CARGO_TOML="$contract_dir/Cargo.toml"
+  sed -i -e "s/version[[:space:]]*=[[:space:]]*\"$OLD\"/version = \"$NEW\"/" "$CARGO_TOML"
+  FILES_MODIFIED+=("$CARGO_TOML")
+done
 
 cargo build
 FILES_MODIFIED+=("Cargo.lock")
