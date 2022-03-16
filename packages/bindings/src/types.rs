@@ -23,14 +23,14 @@ impl Swap {
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 pub struct Step {
     pub pool_id: u64,
-    pub denom_out: String,
+    pub denom: String,
 }
 
 impl Step {
-    pub fn new(pool_id: u64, denom_out: impl Into<String>) -> Self {
+    pub fn new(pool_id: u64, denom: impl Into<String>) -> Self {
         Step {
             pool_id,
-            denom_out: denom_out.into(),
+            denom: denom.into(),
         }
     }
 }
