@@ -298,6 +298,7 @@ impl Module for OsmosisModule {
                 Ok(to_binary(&SpotPriceResponse { price })?)
             }
             OsmosisQuery::EstimatePrice {
+                contract: _sender,
                 first,
                 route,
                 amount,
@@ -306,7 +307,7 @@ impl Module for OsmosisModule {
                     return Err(OsmosisError::Unimplemented.into());
                 }
                 let mut pool = POOLS.load(storage, first.pool_id)?;
-                let amount = pool.swap_with_limit(&first.denom_in, &first.denom_out, amount)?;
+                let amount = pool.swap(&first.denom_in, &first.denom_out, amount)?;
                 Ok(to_binary(&EstimatePriceResponse { amount })?)
             }
         }
@@ -403,6 +404,7 @@ impl OsmosisApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cosmwasm_std::testing::MOCK_CONTRACT_ADDR;
     use cosmwasm_std::{coin, Uint128};
     use cw_multi_test::Executor;
     use osmo_bindings::Swap;
@@ -509,13 +511,11 @@ mod tests {
 
         // estimate the price (501505 * 0.997 = 500_000) after fees gone
         let query = OsmosisQuery::estimate_price(
+            MOCK_CONTRACT_ADDR,
             pool_id,
             &coin_b.denom,
             &coin_a.denom,
-            SwapAmountWithLimit::ExactIn {
-                input: Uint128::new(501505),
-                min_output: Uint128::zero(),
-            },
+            SwapAmount::In(Uint128::new(501505)),
         );
         let EstimatePriceResponse { amount } = app.wrap().query(&query.into()).unwrap();
         // 6M * 1.5M = 2M * 4.5M -> output = 1.5M
@@ -524,13 +524,11 @@ mod tests {
 
         // now try the reverse query. we know what we need to pay to get 1.5M out
         let query = OsmosisQuery::estimate_price(
+            MOCK_CONTRACT_ADDR,
             pool_id,
             &coin_b.denom,
             &coin_a.denom,
-            SwapAmountWithLimit::ExactOut {
-                output: Uint128::new(1500000),
-                max_input: Uint128::MAX,
-            },
+            SwapAmount::Out(Uint128::new(1500000)),
         );
         let EstimatePriceResponse { amount } = app.wrap().query(&query.into()).unwrap();
         let expected = SwapAmount::In(Uint128::new(501505));
