@@ -2,7 +2,6 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::types::{Step, Swap, SwapAmount};
-use crate::SwapAmountWithLimit;
 use cosmwasm_std::{Coin, CustomQuery, Decimal, Uint128};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
@@ -29,7 +28,7 @@ pub enum OsmosisQuery {
         contract: String,
         first: Swap,
         route: Vec<Step>,
-        amount: SwapAmountWithLimit,
+        amount: SwapAmount,
     },
 }
 
@@ -50,7 +49,7 @@ impl OsmosisQuery {
         pool_id: u64,
         denom_in: impl Into<String>,
         denom_out: impl Into<String>,
-        amount: SwapAmountWithLimit,
+        amount: SwapAmount,
     ) -> Self {
         OsmosisQuery::EstimatePrice {
             contract: contract.into(),
