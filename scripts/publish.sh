@@ -5,7 +5,7 @@ command -v shellcheck > /dev/null && shellcheck "$0"
 # These are imported by other packages - wait 30 seconds between each as they have linear dependencies
 BASE_CRATES="packages/bindings packages/bindings-test"
 
-ALL_CRATES=""
+ALL_CRATES="contracts/reflect"
 
 SLEEP_TIME=30
 
