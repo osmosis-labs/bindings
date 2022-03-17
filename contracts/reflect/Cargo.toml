@@ -1,6 +1,6 @@
 [package]
 name = "osmo-reflect"
-version = "0.0.0"
+version = "0.3.0"
 authors = ["Ethan Frey <ethanfrey@users.noreply.github.com>"]
 edition = "2018"
 description = "Reflect messages to use for test cases - based on cw-mask"
