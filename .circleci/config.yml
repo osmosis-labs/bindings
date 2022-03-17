@@ -240,17 +240,18 @@ jobs:
           name: Install ghr
           command: wget https://github.com/tcnksm/ghr/releases/download/v0.14.0/ghr_v0.14.0_linux_amd64.tar.gz -O - | tar -zxvf - -C /usr/local/bin --wildcards --strip-components 1 */ghr
       - run:
+          name: Build and run schema generator for packages
+          command: |
+            for S in ./packages/*/examples/schema.rs
+            do
+              P=$(dirname $S)/..
+              echo "Generating schema for $P ..."
+              (cd $P && cargo schema --locked && tar -zcf ~/project/schemas/$(basename $(pwd))_schema.tar.gz ./schema)
+            done
+      - run:
           name: Build and run schema generator for contracts
           command: |
             for C in ./contracts/*/
-            do
-              echo "Generating schema for $C ..."
-              (cd $C && cargo schema --locked && tar -zcf ~/project/schemas/$(basename $(pwd))_schema.tar.gz ./schema)
-            done
-      - run:
-          name: Build and run schema generator for packages
-          command: |
-            for C in ./packages/*/
             do
               echo "Generating schema for $C ..."
               (cd $C && cargo schema --locked && tar -zcf ~/project/schemas/$(basename $(pwd))_schema.tar.gz ./schema)
