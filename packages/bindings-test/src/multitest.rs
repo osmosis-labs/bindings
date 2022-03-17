@@ -124,6 +124,32 @@ impl Pool {
         Ok(payout)
     }
 
+    pub fn swap_with_limit(
+        &mut self,
+        denom_in: &str,
+        denom_out: &str,
+        amount: SwapAmountWithLimit,
+    ) -> Result<SwapAmount, OsmosisError> {
+        match amount {
+            SwapAmountWithLimit::ExactIn { input, min_output } => {
+                let payout = self.swap(denom_in, denom_out, SwapAmount::In(input))?;
+                if payout.as_out() < min_output {
+                    Err(OsmosisError::PriceTooLow)
+                } else {
+                    Ok(payout)
+                }
+            }
+            SwapAmountWithLimit::ExactOut { output, max_input } => {
+                let payin = self.swap(denom_in, denom_out, SwapAmount::Out(output))?;
+                if payin.as_in() > max_input {
+                    Err(OsmosisError::PriceTooLow)
+                } else {
+                    Ok(payin)
+                }
+            }
+        }
+    }
+
     pub fn gamm_denom(&self, pool_id: u64) -> String {
         // see https://github.com/osmosis-labs/osmosis/blob/e13cddc698a121dce2f8919b2a0f6a743f4082d6/x/gamm/types/key.go#L52-L54
         format!("gamm/pool/{}", pool_id)
@@ -199,28 +225,12 @@ impl Module for OsmosisModule {
                     return Err(OsmosisError::Unimplemented.into());
                 }
                 let mut pool = POOLS.load(storage, first.pool_id)?;
+                let payout =
+                    pool.swap_with_limit(&first.denom_in, &first.denom_out, amount.clone())?;
                 let (pay_in, get_out) = match amount {
-                    SwapAmountWithLimit::ExactIn { input, min_output } => {
-                        let payout = pool
-                            .swap(&first.denom_in, &first.denom_out, SwapAmount::In(input))?
-                            .as_out();
-                        if payout < min_output {
-                            Err(OsmosisError::PriceTooLow)
-                        } else {
-                            Ok((input, payout))
-                        }
-                    }
-                    SwapAmountWithLimit::ExactOut { output, max_input } => {
-                        let payin = pool
-                            .swap(&first.denom_in, &first.denom_out, SwapAmount::Out(output))?
-                            .as_in();
-                        if payin > max_input {
-                            Err(OsmosisError::PriceTooLow)
-                        } else {
-                            Ok((payin, output))
-                        }
-                    }
-                }?;
+                    SwapAmountWithLimit::ExactIn { input, .. } => (input, payout.as_out()),
+                    SwapAmountWithLimit::ExactOut { output, .. } => (payout.as_in(), output),
+                };
                 // save updated pool state
                 POOLS.save(storage, first.pool_id, &pool)?;
 
@@ -288,6 +298,7 @@ impl Module for OsmosisModule {
                 Ok(to_binary(&SpotPriceResponse { price })?)
             }
             OsmosisQuery::EstimatePrice {
+                contract: _sender,
                 first,
                 route,
                 amount,
@@ -393,6 +404,7 @@ impl OsmosisApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cosmwasm_std::testing::MOCK_CONTRACT_ADDR;
     use cosmwasm_std::{coin, Uint128};
     use cw_multi_test::Executor;
     use osmo_bindings::Swap;
@@ -499,6 +511,7 @@ mod tests {
 
         // estimate the price (501505 * 0.997 = 500_000) after fees gone
         let query = OsmosisQuery::estimate_price(
+            MOCK_CONTRACT_ADDR,
             pool_id,
             &coin_b.denom,
             &coin_a.denom,
@@ -511,6 +524,7 @@ mod tests {
 
         // now try the reverse query. we know what we need to pay to get 1.5M out
         let query = OsmosisQuery::estimate_price(
+            MOCK_CONTRACT_ADDR,
             pool_id,
             &coin_b.denom,
             &coin_a.denom,
