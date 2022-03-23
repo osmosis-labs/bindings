@@ -297,7 +297,7 @@ impl Module for OsmosisModule {
                 let price = pool.spot_price(&swap.denom_in, &swap.denom_out, with_swap_fee)?;
                 Ok(to_binary(&SpotPriceResponse { price })?)
             }
-            OsmosisQuery::EstimatePrice {
+            OsmosisQuery::EstimateSwap {
                 contract: _sender,
                 first,
                 route,
