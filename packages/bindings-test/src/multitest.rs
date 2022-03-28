@@ -233,7 +233,7 @@ impl Module for OsmosisModule {
                 let mut pool = POOLS.load(storage, first.pool_id)?;
                 let payout =
                     pool.swap_with_limit(&first.denom_in, &first.denom_out, amount.clone())?;
-                let (pay_in, get_out) = match amount.clone() {
+                let (pay_in, get_out) = match amount {
                     SwapAmountWithLimit::ExactIn { input, .. } => (input, payout.as_out()),
                     SwapAmountWithLimit::ExactOut { output, .. } => (payout.as_in(), output),
                 };
@@ -421,7 +421,7 @@ impl OsmosisApp {
 mod tests {
     use super::*;
     use cosmwasm_std::testing::MOCK_CONTRACT_ADDR;
-    use cosmwasm_std::{coin, Uint128};
+    use cosmwasm_std::{coin, from_slice, Uint128};
     use cw_multi_test::Executor;
     use osmo_bindings::Swap;
 
@@ -598,13 +598,17 @@ mod tests {
                 max_input: Uint128::new(600_000),
             },
         );
-        app.execute(trader.clone(), msg.into()).unwrap();
+        let res = app.execute(trader.clone(), msg.into()).unwrap();
 
         // update balances (800_000 - 501_505 paid = 298_495)
         let Coin { amount, .. } = app.wrap().query_balance(&trader, &coin_a.denom).unwrap();
         assert_eq!(amount, Uint128::new(1_500_000));
         let Coin { amount, .. } = app.wrap().query_balance(&trader, &coin_b.denom).unwrap();
         assert_eq!(amount, Uint128::new(298_495));
+
+        // check the response contains proper value
+        let input: EstimatePriceResponse = from_slice(res.data.unwrap().as_slice()).unwrap();
+        assert_eq!(input.amount, SwapAmount::In(Uint128::new(501_505)));
 
         // check pool state properly updated with fees
         let query = OsmosisQuery::PoolState { id: pool_id }.into();
