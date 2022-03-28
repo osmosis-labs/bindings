@@ -12,6 +12,7 @@ pub enum OsmosisMsg {
     /// Contracts can mint native tokens that have an auto-generated denom
     /// namespaced under the contract's address. A contract may create any number
     /// of independent sub-denoms.
+    /// Returns FullDenomResponse in the data field of the Response
     MintTokens {
         /// Must be 2-32 alphanumeric characters
         /// FIXME: revisit actual requirements in SDK
@@ -20,6 +21,7 @@ pub enum OsmosisMsg {
         recipient: String,
     },
     /// Swap over one or more pools
+    /// Returns EstimatePriceResponse in the data field of the Response
     Swap {
         first: Swap,
         route: Vec<Step>,

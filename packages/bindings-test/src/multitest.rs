@@ -212,9 +212,15 @@ impl Module for OsmosisModule {
                 let denom = self.build_denom(&sender, &sub_denom);
                 let mint = BankSudo::Mint {
                     to_address: recipient,
-                    amount: vec![Coin { denom, amount }],
+                    amount: coins(amount.u128(), &denom),
                 };
-                router.sudo(api, storage, block, mint.into())
+                router.sudo(api, storage, block, mint.into())?;
+
+                let data = Some(to_binary(&FullDenomResponse { denom })?);
+                Ok(AppResponse {
+                    data,
+                    events: vec![],
+                })
             }
             OsmosisMsg::Swap {
                 first,
@@ -227,7 +233,7 @@ impl Module for OsmosisModule {
                 let mut pool = POOLS.load(storage, first.pool_id)?;
                 let payout =
                     pool.swap_with_limit(&first.denom_in, &first.denom_out, amount.clone())?;
-                let (pay_in, get_out) = match amount {
+                let (pay_in, get_out) = match amount.clone() {
                     SwapAmountWithLimit::ExactIn { input, .. } => (input, payout.as_out()),
                     SwapAmountWithLimit::ExactOut { output, .. } => (payout.as_in(), output),
                 };
@@ -246,7 +252,17 @@ impl Module for OsmosisModule {
                     to_address: sender.to_string(),
                     amount: coins(get_out.u128(), &first.denom_out),
                 };
-                router.sudo(api, storage, block, mint.into())
+                router.sudo(api, storage, block, mint.into())?;
+
+                let output = match amount {
+                    SwapAmountWithLimit::ExactIn { .. } => SwapAmount::Out(get_out),
+                    SwapAmountWithLimit::ExactOut { .. } => SwapAmount::In(pay_in),
+                };
+                let data = Some(to_binary(&EstimatePriceResponse { amount: output })?);
+                Ok(AppResponse {
+                    data,
+                    events: vec![],
+                })
             }
         }
     }
