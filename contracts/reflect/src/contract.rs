@@ -161,7 +161,7 @@ mod tests {
     };
     use cosmwasm_std::{
         coin, coins, from_binary, AllBalanceResponse, BankMsg, BankQuery, Binary, Coin, Event,
-        StakingMsg, StdError, SubMsgExecutionResponse, Uint128,
+        StakingMsg, StdError, SubMsgExecutionResponse,
     };
     use cosmwasm_std::{OwnedDeps, SubMsgResult, SystemError};
     use std::marker::PhantomData;
@@ -275,12 +275,6 @@ mod tests {
             BankMsg::Send {
                 to_address: String::from("friend"),
                 amount: coins(1, "token"),
-            }
-            .into(),
-            OsmosisMsg::MintTokens {
-                sub_denom: "bonus".to_string(),
-                amount: Uint128::new(123456789),
-                recipient: "creator".to_string(),
             }
             .into(),
             StakingMsg::Delegate {

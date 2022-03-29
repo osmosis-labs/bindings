@@ -282,7 +282,7 @@ impl Module for OsmosisModule {
                 Ok(to_binary(&SpotPriceResponse { price })?)
             }
             OsmosisQuery::EstimateSwap {
-                contract: _sender,
+                sender: _sender,
                 first,
                 route,
                 amount,

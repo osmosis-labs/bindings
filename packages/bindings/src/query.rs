@@ -20,7 +20,7 @@ pub enum OsmosisQuery {
     /// Warning: this can easily be manipulated via sandwich attacks, do not use as price oracle.
     /// We will add TWAP for more robust price feed.
     EstimateSwap {
-        contract: String,
+        sender: String,
         first: Swap,
         route: Vec<Step>,
         amount: SwapAmount,
@@ -47,7 +47,7 @@ impl OsmosisQuery {
         amount: SwapAmount,
     ) -> Self {
         OsmosisQuery::EstimateSwap {
-            contract: contract.into(),
+            sender: contract.into(),
             first: Swap::new(pool_id, denom_in, denom_out),
             amount,
             route: vec![],
