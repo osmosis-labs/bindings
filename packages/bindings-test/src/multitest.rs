@@ -18,8 +18,8 @@ use cw_multi_test::{
 use cw_storage_plus::Map;
 
 use osmo_bindings::{
-    EstimatePriceResponse, FullDenomResponse, OsmosisMsg, OsmosisQuery, PoolStateResponse,
-    SpotPriceResponse, SwapAmount, SwapAmountWithLimit,
+    EstimatePriceResponse, OsmosisMsg, OsmosisQuery, PoolStateResponse, SpotPriceResponse,
+    SwapAmount, SwapAmountWithLimit,
 };
 
 pub const POOLS: Map<u64, Pool> = Map::new("pools");
@@ -174,11 +174,6 @@ pub struct OsmosisModule {}
 pub const BLOCK_TIME: u64 = 5;
 
 impl OsmosisModule {
-    fn build_denom(&self, contract: &Addr, sub_denom: &str) -> String {
-        // TODO: validation assertion on sub_denom
-        format!("cw/{}/{}", contract, sub_denom)
-    }
-
     /// Used to mock out the response for TgradeQuery::ValidatorVotes
     pub fn set_pool(&self, storage: &mut dyn Storage, pool_id: u64, pool: &Pool) -> StdResult<()> {
         POOLS.save(storage, pool_id, pool)
@@ -204,24 +199,6 @@ impl Module for OsmosisModule {
         QueryC: CustomQuery + DeserializeOwned + 'static,
     {
         match msg {
-            OsmosisMsg::MintTokens {
-                sub_denom,
-                amount,
-                recipient,
-            } => {
-                let denom = self.build_denom(&sender, &sub_denom);
-                let mint = BankSudo::Mint {
-                    to_address: recipient,
-                    amount: coins(amount.u128(), &denom),
-                };
-                router.sudo(api, storage, block, mint.into())?;
-
-                let data = Some(to_binary(&FullDenomResponse { denom })?);
-                Ok(AppResponse {
-                    data,
-                    events: vec![],
-                })
-            }
             OsmosisMsg::Swap {
                 first,
                 route,
@@ -284,22 +261,13 @@ impl Module for OsmosisModule {
 
     fn query(
         &self,
-        api: &dyn Api,
+        _api: &dyn Api,
         storage: &dyn Storage,
         _querier: &dyn Querier,
         _block: &BlockInfo,
         request: OsmosisQuery,
     ) -> anyhow::Result<Binary> {
         match request {
-            OsmosisQuery::FullDenom {
-                contract,
-                sub_denom,
-            } => {
-                let contract = api.addr_validate(&contract)?;
-                let denom = self.build_denom(&contract, &sub_denom);
-                let res = FullDenomResponse { denom };
-                Ok(to_binary(&res)?)
-            }
             OsmosisQuery::PoolState { id } => {
                 let pool = POOLS.load(storage, id)?;
                 let res = pool.into_response(id);
@@ -424,53 +392,6 @@ mod tests {
     use cosmwasm_std::{coin, from_slice, Uint128};
     use cw_multi_test::Executor;
     use osmo_bindings::Swap;
-
-    #[test]
-    fn mint_token() {
-        let contract = Addr::unchecked("govner");
-        let rcpt = Addr::unchecked("townies");
-        let sub_denom = "fundz";
-
-        let mut app = OsmosisApp::new();
-
-        // no tokens
-        let start = app.wrap().query_all_balances(rcpt.as_str()).unwrap();
-        assert_eq!(start, vec![]);
-
-        // let's find the mapping
-        let FullDenomResponse { denom } = app
-            .wrap()
-            .query(
-                &OsmosisQuery::FullDenom {
-                    contract: contract.to_string(),
-                    sub_denom: sub_denom.to_string(),
-                }
-                .into(),
-            )
-            .unwrap();
-        assert_ne!(denom, sub_denom);
-        assert!(denom.len() > 10);
-
-        // prepare to mint
-        let amount = Uint128::new(1234567);
-        let msg = OsmosisMsg::MintTokens {
-            sub_denom: sub_denom.to_string(),
-            amount,
-            recipient: rcpt.to_string(),
-        };
-
-        // simulate contract calling
-        app.execute(contract, msg.into()).unwrap();
-
-        // we got tokens!
-        let end = app.wrap().query_balance(rcpt.as_str(), &denom).unwrap();
-        let expected = Coin { denom, amount };
-        assert_eq!(end, expected);
-
-        // but no minting of unprefixed version
-        let empty = app.wrap().query_balance(rcpt.as_str(), sub_denom).unwrap();
-        assert_eq!(empty.amount, Uint128::zero());
-    }
 
     #[test]
     fn query_pool() {
