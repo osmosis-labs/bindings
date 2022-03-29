@@ -7,11 +7,6 @@ use cosmwasm_std::{Coin, CustomQuery, Decimal, Uint128};
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum OsmosisQuery {
-    /// Given a sub-denom minted by a contract via `OsmosisMsg::MintTokens`,
-    /// returns the full denom as used by `BankMsg::Send`.
-    /// You may call `FullDenom { contract: env.contract.address, sub_denom }` to find the denom issued
-    /// by the current contract.
-    FullDenom { contract: String, sub_denom: String },
     /// For a given pool ID, list all tokens traded on it with current liquidity (spot).
     /// As well as the total number of LP shares and their denom
     PoolState { id: u64 },
@@ -25,7 +20,7 @@ pub enum OsmosisQuery {
     /// Warning: this can easily be manipulated via sandwich attacks, do not use as price oracle.
     /// We will add TWAP for more robust price feed.
     EstimateSwap {
-        contract: String,
+        sender: String,
         first: Swap,
         route: Vec<Step>,
         amount: SwapAmount,
@@ -52,17 +47,12 @@ impl OsmosisQuery {
         amount: SwapAmount,
     ) -> Self {
         OsmosisQuery::EstimateSwap {
-            contract: contract.into(),
+            sender: contract.into(),
             first: Swap::new(pool_id, denom_in, denom_out),
             amount,
             route: vec![],
         }
     }
-}
-
-#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
-pub struct FullDenomResponse {
-    pub denom: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
