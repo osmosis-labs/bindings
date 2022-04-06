@@ -413,6 +413,7 @@ dependencies = [
  "cosmwasm-std",
  "cw-multi-test",
  "cw-storage-plus",
+ "itertools",
  "osmo-bindings",
  "schemars",
  "serde",
