@@ -20,8 +20,8 @@ use cw_multi_test::{
 use cw_storage_plus::Map;
 
 use osmo_bindings::{
-    EstimatePriceResponse, OsmosisMsg, OsmosisQuery, PoolStateResponse, SpotPriceResponse, Swap,
-    SwapAmount, SwapAmountWithLimit,
+    EstimatePriceResponse, OsmosisMsg, OsmosisQuery, PoolStateResponse, SpotPriceResponse, Step,
+    Swap, SwapAmount, SwapAmountWithLimit,
 };
 
 pub const POOLS: Map<u64, Pool> = Map::new("pools");
@@ -182,6 +182,54 @@ impl OsmosisModule {
     }
 }
 
+fn complex_swap(
+    storage: &dyn Storage,
+    first: Swap,
+    route: Vec<Step>,
+    amount: SwapAmount,
+) -> AnyResult<(SwapAmount, Vec<(u64, Pool)>)> {
+    // all the `Swap`s we need to execute in order
+    let swaps: Vec<_> = {
+        let frst = iter::once(first.clone());
+        let rest = iter::once((first.pool_id, first.denom_out))
+            .chain(route.into_iter().map(|step| (step.pool_id, step.denom_out)))
+            .tuple_windows()
+            .map(|((_, denom_in), (pool_id, denom_out))| Swap {
+                pool_id,
+                denom_in,
+                denom_out,
+            });
+        frst.chain(rest).collect()
+    };
+
+    let mut updated_pools = vec![];
+
+    match amount {
+        SwapAmount::In(mut input) => {
+            for swap in &swaps {
+                let mut pool = POOLS.load(storage, swap.pool_id)?;
+                let payout = pool.swap(&swap.denom_in, &swap.denom_out, SwapAmount::In(input))?;
+                updated_pools.push((swap.pool_id, pool));
+
+                input = payout.as_out();
+            }
+
+            Ok((SwapAmount::Out(input), updated_pools))
+        }
+        SwapAmount::Out(mut output) => {
+            for swap in swaps.iter().rev() {
+                let mut pool = POOLS.load(storage, swap.pool_id)?;
+                let payout = pool.swap(&swap.denom_in, &swap.denom_out, SwapAmount::Out(output))?;
+                updated_pools.push((swap.pool_id, pool));
+
+                output = payout.as_in();
+            }
+
+            Ok((SwapAmount::In(output), updated_pools))
+        }
+    }
+}
+
 impl Module for OsmosisModule {
     type ExecT = OsmosisMsg;
     type QueryT = OsmosisQuery;
@@ -206,63 +254,32 @@ impl Module for OsmosisModule {
                 route,
                 amount,
             } => {
-                // all the `Swap`s we need to execute in order
-                let swaps: Vec<_> = {
-                    let frst = iter::once(first.clone());
-                    let rest = iter::once((first.pool_id, first.denom_out.clone()))
-                        .chain(route.into_iter().map(|step| (step.pool_id, step.denom_out)))
-                        .tuple_windows()
-                        .map(|((_, denom_in), (pool_id, denom_out))| Swap {
-                            pool_id,
-                            denom_in,
-                            denom_out,
-                        });
-                    frst.chain(rest).collect()
-                };
+                let denom_in = first.denom_in.clone();
+                let denom_out = route
+                    .iter()
+                    .last()
+                    .map(|step| step.denom_out.clone())
+                    .unwrap_or_else(|| first.denom_out.clone());
 
-                let swap_result = match amount {
-                    SwapAmountWithLimit::ExactIn {
-                        mut input,
-                        min_output,
-                    } => {
-                        for swap in &swaps {
-                            let mut pool = POOLS.load(storage, swap.pool_id)?;
-                            let payout =
-                                pool.swap(&swap.denom_in, &swap.denom_out, SwapAmount::In(input))?;
-                            POOLS.save(storage, swap.pool_id, &pool)?;
+                let (swap_result, updated_pools) =
+                    complex_swap(storage, first, route, amount.clone().discard_limit())?;
 
-                            input = payout.as_out();
-                        }
-
-                        if input < min_output {
+                match amount {
+                    SwapAmountWithLimit::ExactIn { min_output, .. } => {
+                        if swap_result.as_out() < min_output {
                             return Err(OsmosisError::PriceTooLow.into());
                         }
-
-                        SwapAmount::Out(input)
                     }
-                    SwapAmountWithLimit::ExactOut {
-                        mut output,
-                        max_input,
-                    } => {
-                        for swap in swaps.iter().rev() {
-                            let mut pool = POOLS.load(storage, swap.pool_id)?;
-                            let payout = pool.swap(
-                                &swap.denom_in,
-                                &swap.denom_out,
-                                SwapAmount::Out(output),
-                            )?;
-                            POOLS.save(storage, swap.pool_id, &pool)?;
-
-                            output = payout.as_in();
-                        }
-
-                        if output > max_input {
+                    SwapAmountWithLimit::ExactOut { max_input, .. } => {
+                        if swap_result.as_in() > max_input {
                             return Err(OsmosisError::PriceTooLow.into());
                         }
-
-                        SwapAmount::In(output)
                     }
-                };
+                }
+
+                for (pool_id, pool) in updated_pools {
+                    POOLS.save(storage, pool_id, &pool)?;
+                }
 
                 let (pay_in, get_out) = match amount {
                     SwapAmountWithLimit::ExactIn { input, .. } => (input, swap_result.as_out()),
@@ -272,14 +289,14 @@ impl Module for OsmosisModule {
                 // Note: to make testing easier, we just mint and burn - no balance for AMM
                 // burn pay_in tokens from sender
                 let burn = BankMsg::Burn {
-                    amount: coins(pay_in.u128(), &first.denom_in),
+                    amount: coins(pay_in.u128(), &denom_in),
                 };
                 router.execute(api, storage, block, sender.clone(), burn.into())?;
 
                 // mint get_out tokens to sender
                 let mint = BankSudo::Mint {
                     to_address: sender.to_string(),
-                    amount: coins(get_out.u128(), &swaps.iter().last().unwrap().denom_out),
+                    amount: coins(get_out.u128(), denom_out),
                 };
                 router.sudo(api, storage, block, mint.into())?;
 
@@ -339,11 +356,8 @@ impl Module for OsmosisModule {
                 route,
                 amount,
             } => {
-                if !route.is_empty() {
-                    return Err(OsmosisError::Unimplemented.into());
-                }
-                let mut pool = POOLS.load(storage, first.pool_id)?;
-                let amount = pool.swap(&first.denom_in, &first.denom_out, amount)?;
+                let (amount, _) = complex_swap(storage, first, route, amount)?;
+
                 Ok(to_binary(&EstimatePriceResponse { amount })?)
             }
         }
