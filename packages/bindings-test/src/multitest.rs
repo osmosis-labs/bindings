@@ -608,6 +608,82 @@ mod tests {
     }
 
     #[test]
+    fn swap_with_route_max_input_exceeded() {
+        let pool1 = Pool::new(coin(6_000_000, "osmo"), coin(3_000_000, "atom"));
+        let pool2 = Pool::new(coin(2_000_000, "atom"), coin(1_000_000, "btc"));
+        let trader = Addr::unchecked("trader");
+
+        let mut app = OsmosisApp::new();
+        app.init_modules(|router, _, storage| {
+            router.custom.set_pool(storage, 1, &pool1).unwrap();
+            router.custom.set_pool(storage, 2, &pool2).unwrap();
+            router
+                .bank
+                .init_balance(storage, &trader, coins(5000, "osmo"))
+                .unwrap()
+        });
+
+        let msg = OsmosisMsg::Swap {
+            first: Swap {
+                pool_id: 1,
+                denom_in: "osmo".to_string(),
+                denom_out: "atom".to_string(),
+            },
+            route: vec![Step {
+                pool_id: 2,
+                denom_out: "btc".to_string(),
+            }],
+            amount: SwapAmountWithLimit::ExactOut {
+                output: Uint128::new(1000),
+                max_input: Uint128::new(4000),
+            },
+        };
+        let err = app.execute(trader, msg.into()).unwrap_err();
+        assert_eq!(
+            err.downcast::<OsmosisError>().unwrap(),
+            OsmosisError::PriceTooLow
+        );
+    }
+
+    #[test]
+    fn swap_with_route_min_output_not_met() {
+        let pool1 = Pool::new(coin(6_000_000, "osmo"), coin(3_000_000, "atom"));
+        let pool2 = Pool::new(coin(2_000_000, "atom"), coin(1_000_000, "btc"));
+        let trader = Addr::unchecked("trader");
+
+        let mut app = OsmosisApp::new();
+        app.init_modules(|router, _, storage| {
+            router.custom.set_pool(storage, 1, &pool1).unwrap();
+            router.custom.set_pool(storage, 2, &pool2).unwrap();
+            router
+                .bank
+                .init_balance(storage, &trader, coins(5000, "osmo"))
+                .unwrap()
+        });
+
+        let msg = OsmosisMsg::Swap {
+            first: Swap {
+                pool_id: 1,
+                denom_in: "osmo".to_string(),
+                denom_out: "atom".to_string(),
+            },
+            route: vec![Step {
+                pool_id: 2,
+                denom_out: "btc".to_string(),
+            }],
+            amount: SwapAmountWithLimit::ExactIn {
+                input: Uint128::new(4000),
+                min_output: Uint128::new(1000),
+            },
+        };
+        let err = app.execute(trader, msg.into()).unwrap_err();
+        assert_eq!(
+            err.downcast::<OsmosisError>().unwrap(),
+            OsmosisError::PriceTooLow
+        );
+    }
+
+    #[test]
     fn perform_swap_with_route_exact_out() {
         let pool1 = Pool::new(coin(6_000_000, "osmo"), coin(3_000_000, "atom"));
         let pool2 = Pool::new(coin(2_000_000, "atom"), coin(1_000_000, "btc"));
@@ -624,7 +700,6 @@ mod tests {
                 .unwrap()
         });
 
-        // now a proper swap
         let msg = OsmosisMsg::Swap {
             first: Swap {
                 pool_id: 1,
