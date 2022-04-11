@@ -64,3 +64,12 @@ pub enum SwapAmountWithLimit {
     ExactIn { input: Uint128, min_output: Uint128 },
     ExactOut { output: Uint128, max_input: Uint128 },
 }
+
+impl SwapAmountWithLimit {
+    pub fn discard_limit(self) -> SwapAmount {
+        match self {
+            SwapAmountWithLimit::ExactIn { input, .. } => SwapAmount::In(input),
+            SwapAmountWithLimit::ExactOut { output, .. } => SwapAmount::Out(output),
+        }
+    }
+}

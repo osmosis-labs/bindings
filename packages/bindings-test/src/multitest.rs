@@ -1,9 +1,11 @@
 use anyhow::{bail, Result as AnyResult};
+use itertools::Itertools;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::cmp::max;
 use std::fmt::Debug;
+use std::iter;
 use std::ops::{Deref, DerefMut};
 use thiserror::Error;
 
@@ -18,8 +20,8 @@ use cw_multi_test::{
 use cw_storage_plus::Map;
 
 use osmo_bindings::{
-    EstimatePriceResponse, OsmosisMsg, OsmosisQuery, PoolStateResponse, SpotPriceResponse,
-    SwapAmount, SwapAmountWithLimit,
+    EstimatePriceResponse, OsmosisMsg, OsmosisQuery, PoolStateResponse, SpotPriceResponse, Step,
+    Swap, SwapAmount, SwapAmountWithLimit,
 };
 
 pub const POOLS: Map<u64, Pool> = Map::new("pools");
@@ -180,6 +182,54 @@ impl OsmosisModule {
     }
 }
 
+fn complex_swap(
+    storage: &dyn Storage,
+    first: Swap,
+    route: Vec<Step>,
+    amount: SwapAmount,
+) -> AnyResult<(SwapAmount, Vec<(u64, Pool)>)> {
+    // all the `Swap`s we need to execute in order
+    let swaps: Vec<_> = {
+        let frst = iter::once(first.clone());
+        let rest = iter::once((first.pool_id, first.denom_out))
+            .chain(route.into_iter().map(|step| (step.pool_id, step.denom_out)))
+            .tuple_windows()
+            .map(|((_, denom_in), (pool_id, denom_out))| Swap {
+                pool_id,
+                denom_in,
+                denom_out,
+            });
+        frst.chain(rest).collect()
+    };
+
+    let mut updated_pools = vec![];
+
+    match amount {
+        SwapAmount::In(mut input) => {
+            for swap in &swaps {
+                let mut pool = POOLS.load(storage, swap.pool_id)?;
+                let payout = pool.swap(&swap.denom_in, &swap.denom_out, SwapAmount::In(input))?;
+                updated_pools.push((swap.pool_id, pool));
+
+                input = payout.as_out();
+            }
+
+            Ok((SwapAmount::Out(input), updated_pools))
+        }
+        SwapAmount::Out(mut output) => {
+            for swap in swaps.iter().rev() {
+                let mut pool = POOLS.load(storage, swap.pool_id)?;
+                let payout = pool.swap(&swap.denom_in, &swap.denom_out, SwapAmount::Out(output))?;
+                updated_pools.push((swap.pool_id, pool));
+
+                output = payout.as_in();
+            }
+
+            Ok((SwapAmount::In(output), updated_pools))
+        }
+    }
+}
+
 impl Module for OsmosisModule {
     type ExecT = OsmosisMsg;
     type QueryT = OsmosisQuery;
@@ -204,30 +254,49 @@ impl Module for OsmosisModule {
                 route,
                 amount,
             } => {
-                if !route.is_empty() {
-                    return Err(OsmosisError::Unimplemented.into());
+                let denom_in = first.denom_in.clone();
+                let denom_out = route
+                    .iter()
+                    .last()
+                    .map(|step| step.denom_out.clone())
+                    .unwrap_or_else(|| first.denom_out.clone());
+
+                let (swap_result, updated_pools) =
+                    complex_swap(storage, first, route, amount.clone().discard_limit())?;
+
+                match amount {
+                    SwapAmountWithLimit::ExactIn { min_output, .. } => {
+                        if swap_result.as_out() < min_output {
+                            return Err(OsmosisError::PriceTooLow.into());
+                        }
+                    }
+                    SwapAmountWithLimit::ExactOut { max_input, .. } => {
+                        if swap_result.as_in() > max_input {
+                            return Err(OsmosisError::PriceTooLow.into());
+                        }
+                    }
                 }
-                let mut pool = POOLS.load(storage, first.pool_id)?;
-                let payout =
-                    pool.swap_with_limit(&first.denom_in, &first.denom_out, amount.clone())?;
+
+                for (pool_id, pool) in updated_pools {
+                    POOLS.save(storage, pool_id, &pool)?;
+                }
+
                 let (pay_in, get_out) = match amount {
-                    SwapAmountWithLimit::ExactIn { input, .. } => (input, payout.as_out()),
-                    SwapAmountWithLimit::ExactOut { output, .. } => (payout.as_in(), output),
+                    SwapAmountWithLimit::ExactIn { input, .. } => (input, swap_result.as_out()),
+                    SwapAmountWithLimit::ExactOut { output, .. } => (swap_result.as_in(), output),
                 };
-                // save updated pool state
-                POOLS.save(storage, first.pool_id, &pool)?;
 
                 // Note: to make testing easier, we just mint and burn - no balance for AMM
                 // burn pay_in tokens from sender
                 let burn = BankMsg::Burn {
-                    amount: coins(pay_in.u128(), &first.denom_in),
+                    amount: coins(pay_in.u128(), &denom_in),
                 };
                 router.execute(api, storage, block, sender.clone(), burn.into())?;
 
                 // mint get_out tokens to sender
                 let mint = BankSudo::Mint {
                     to_address: sender.to_string(),
-                    amount: coins(get_out.u128(), &first.denom_out),
+                    amount: coins(get_out.u128(), denom_out),
                 };
                 router.sudo(api, storage, block, mint.into())?;
 
@@ -287,11 +356,8 @@ impl Module for OsmosisModule {
                 route,
                 amount,
             } => {
-                if !route.is_empty() {
-                    return Err(OsmosisError::Unimplemented.into());
-                }
-                let mut pool = POOLS.load(storage, first.pool_id)?;
-                let amount = pool.swap(&first.denom_in, &first.denom_out, amount)?;
+                let (amount, _) = complex_swap(storage, first, route, amount)?;
+
                 Ok(to_binary(&EstimatePriceResponse { amount })?)
             }
         }
@@ -391,7 +457,7 @@ mod tests {
     use cosmwasm_std::testing::MOCK_CONTRACT_ADDR;
     use cosmwasm_std::{coin, from_slice, Uint128};
     use cw_multi_test::Executor;
-    use osmo_bindings::Swap;
+    use osmo_bindings::{Step, Swap};
 
     #[test]
     fn query_pool() {
@@ -539,5 +605,277 @@ mod tests {
             coin(2_001_505, &coin_b.denom),
         ];
         assert_eq!(state.assets, expected_assets);
+    }
+
+    #[test]
+    fn swap_with_route_max_input_exceeded() {
+        let pool1 = Pool::new(coin(6_000_000, "osmo"), coin(3_000_000, "atom"));
+        let pool2 = Pool::new(coin(2_000_000, "atom"), coin(1_000_000, "btc"));
+        let trader = Addr::unchecked("trader");
+
+        let mut app = OsmosisApp::new();
+        app.init_modules(|router, _, storage| {
+            router.custom.set_pool(storage, 1, &pool1).unwrap();
+            router.custom.set_pool(storage, 2, &pool2).unwrap();
+            router
+                .bank
+                .init_balance(storage, &trader, coins(5000, "osmo"))
+                .unwrap()
+        });
+
+        let msg = OsmosisMsg::Swap {
+            first: Swap {
+                pool_id: 1,
+                denom_in: "osmo".to_string(),
+                denom_out: "atom".to_string(),
+            },
+            route: vec![Step {
+                pool_id: 2,
+                denom_out: "btc".to_string(),
+            }],
+            amount: SwapAmountWithLimit::ExactOut {
+                output: Uint128::new(1000),
+                max_input: Uint128::new(4000),
+            },
+        };
+        let err = app.execute(trader, msg.into()).unwrap_err();
+        assert_eq!(
+            err.downcast::<OsmosisError>().unwrap(),
+            OsmosisError::PriceTooLow
+        );
+    }
+
+    #[test]
+    fn swap_with_route_min_output_not_met() {
+        let pool1 = Pool::new(coin(6_000_000, "osmo"), coin(3_000_000, "atom"));
+        let pool2 = Pool::new(coin(2_000_000, "atom"), coin(1_000_000, "btc"));
+        let trader = Addr::unchecked("trader");
+
+        let mut app = OsmosisApp::new();
+        app.init_modules(|router, _, storage| {
+            router.custom.set_pool(storage, 1, &pool1).unwrap();
+            router.custom.set_pool(storage, 2, &pool2).unwrap();
+            router
+                .bank
+                .init_balance(storage, &trader, coins(5000, "osmo"))
+                .unwrap()
+        });
+
+        let msg = OsmosisMsg::Swap {
+            first: Swap {
+                pool_id: 1,
+                denom_in: "osmo".to_string(),
+                denom_out: "atom".to_string(),
+            },
+            route: vec![Step {
+                pool_id: 2,
+                denom_out: "btc".to_string(),
+            }],
+            amount: SwapAmountWithLimit::ExactIn {
+                input: Uint128::new(4000),
+                min_output: Uint128::new(1000),
+            },
+        };
+        let err = app.execute(trader, msg.into()).unwrap_err();
+        assert_eq!(
+            err.downcast::<OsmosisError>().unwrap(),
+            OsmosisError::PriceTooLow
+        );
+    }
+
+    #[test]
+    fn swap_with_route_wrong_denom() {
+        let pool1 = Pool::new(coin(6_000_000, "osmo"), coin(3_000_000, "atom"));
+        let pool2 = Pool::new(coin(2_000_000, "atom"), coin(1_000_000, "eth"));
+        let trader = Addr::unchecked("trader");
+
+        let mut app = OsmosisApp::new();
+        app.init_modules(|router, _, storage| {
+            router.custom.set_pool(storage, 1, &pool1).unwrap();
+            router.custom.set_pool(storage, 2, &pool2).unwrap();
+            router
+                .bank
+                .init_balance(storage, &trader, coins(5000, "osmo"))
+                .unwrap()
+        });
+
+        let msg = OsmosisMsg::Swap {
+            first: Swap {
+                pool_id: 1,
+                denom_in: "osmo".to_string(),
+                denom_out: "atom".to_string(),
+            },
+            route: vec![Step {
+                pool_id: 2,
+                denom_out: "btc".to_string(),
+            }],
+            amount: SwapAmountWithLimit::ExactOut {
+                output: Uint128::new(1000),
+                max_input: Uint128::new(4000),
+            },
+        };
+        let err = app.execute(trader, msg.into()).unwrap_err();
+        assert_eq!(
+            err.downcast::<OsmosisError>().unwrap(),
+            OsmosisError::AssetNotInPool
+        );
+    }
+
+    #[test]
+    fn perform_swap_with_route_exact_out() {
+        let pool1 = Pool::new(coin(6_000_000, "osmo"), coin(3_000_000, "atom"));
+        let pool2 = Pool::new(coin(2_000_000, "atom"), coin(1_000_000, "btc"));
+        let trader = Addr::unchecked("trader");
+
+        // set up pools
+        let mut app = OsmosisApp::new();
+        app.init_modules(|router, _, storage| {
+            router.custom.set_pool(storage, 1, &pool1).unwrap();
+            router.custom.set_pool(storage, 2, &pool2).unwrap();
+            router
+                .bank
+                .init_balance(storage, &trader, coins(5000, "osmo"))
+                .unwrap()
+        });
+
+        let msg = OsmosisMsg::Swap {
+            first: Swap {
+                pool_id: 1,
+                denom_in: "osmo".to_string(),
+                denom_out: "atom".to_string(),
+            },
+            route: vec![Step {
+                pool_id: 2,
+                denom_out: "btc".to_string(),
+            }],
+            amount: SwapAmountWithLimit::ExactOut {
+                output: Uint128::new(1000),
+                max_input: Uint128::new(5000),
+            },
+        };
+        let res = app.execute(trader.clone(), msg.into()).unwrap();
+
+        let Coin { amount, .. } = app.wrap().query_balance(&trader, "osmo").unwrap();
+        assert_eq!(amount, Uint128::new(5000 - 4033));
+        let Coin { amount, .. } = app.wrap().query_balance(&trader, "btc").unwrap();
+        assert_eq!(amount, Uint128::new(1000));
+
+        // check the response contains proper value
+        let input: EstimatePriceResponse = from_slice(res.data.unwrap().as_slice()).unwrap();
+        assert_eq!(input.amount, SwapAmount::In(Uint128::new(4033)));
+
+        // check pool state properly updated with fees
+        let query = OsmosisQuery::PoolState { id: 1 }.into();
+        let state: PoolStateResponse = app.wrap().query(&query).unwrap();
+        let expected_assets = vec![
+            coin(6_000_000 + 4033, "osmo"),
+            coin(3_000_000 - 2009, "atom"),
+        ];
+        assert_eq!(state.assets, expected_assets);
+
+        let query = OsmosisQuery::PoolState { id: 2 }.into();
+        let state: PoolStateResponse = app.wrap().query(&query).unwrap();
+        let expected_assets = vec![
+            coin(2_000_000 + 2009, "atom"),
+            coin(1_000_000 - 1000, "btc"),
+        ];
+        assert_eq!(state.assets, expected_assets);
+    }
+
+    #[test]
+    fn perform_swap_with_route_exact_in() {
+        let pool1 = Pool::new(coin(6_000_000, "osmo"), coin(3_000_000, "atom"));
+        let pool2 = Pool::new(coin(2_000_000, "atom"), coin(1_000_000, "btc"));
+        let trader = Addr::unchecked("trader");
+
+        // set up pools
+        let mut app = OsmosisApp::new();
+        app.init_modules(|router, _, storage| {
+            router.custom.set_pool(storage, 1, &pool1).unwrap();
+            router.custom.set_pool(storage, 2, &pool2).unwrap();
+            router
+                .bank
+                .init_balance(storage, &trader, coins(5000, "osmo"))
+                .unwrap()
+        });
+
+        // now a proper swap
+        let msg = OsmosisMsg::Swap {
+            first: Swap {
+                pool_id: 1,
+                denom_in: "osmo".to_string(),
+                denom_out: "atom".to_string(),
+            },
+            route: vec![Step {
+                pool_id: 2,
+                denom_out: "btc".to_string(),
+            }],
+            amount: SwapAmountWithLimit::ExactIn {
+                input: Uint128::new(4000),
+                min_output: Uint128::new(900),
+            },
+        };
+        let res = app.execute(trader.clone(), msg.into()).unwrap();
+
+        let Coin { amount, .. } = app.wrap().query_balance(&trader, "osmo").unwrap();
+        assert_eq!(amount, Uint128::new(5000 - 4000));
+        let Coin { amount, .. } = app.wrap().query_balance(&trader, "btc").unwrap();
+        assert_eq!(amount, Uint128::new(993));
+
+        // check the response contains proper value
+        let input: EstimatePriceResponse = from_slice(res.data.unwrap().as_slice()).unwrap();
+        assert_eq!(input.amount, SwapAmount::Out(Uint128::new(993)));
+
+        // check pool state properly updated with fees
+        let query = OsmosisQuery::PoolState { id: 1 }.into();
+        let state: PoolStateResponse = app.wrap().query(&query).unwrap();
+        let expected_assets = vec![
+            coin(6_000_000 + 4000, "osmo"),
+            coin(3_000_000 - 1993, "atom"),
+        ];
+        assert_eq!(state.assets, expected_assets);
+
+        let query = OsmosisQuery::PoolState { id: 2 }.into();
+        let state: PoolStateResponse = app.wrap().query(&query).unwrap();
+        let expected_assets = vec![coin(2_000_000 + 1993, "atom"), coin(1_000_000 - 993, "btc")];
+        assert_eq!(state.assets, expected_assets);
+    }
+
+    // TODO: make the following test work
+    #[test]
+    #[ignore]
+    fn estimate_swap_regression() {
+        let pool = Pool::new(coin(2_000_000, "atom"), coin(1_000_000, "btc"));
+
+        // set up with one pool
+        let mut app = OsmosisApp::new();
+        app.init_modules(|router, _, storage| {
+            router.custom.set_pool(storage, 1, &pool).unwrap();
+        });
+
+        // estimate the price (501505 * 0.997 = 500_000) after fees gone
+        let query = OsmosisQuery::estimate_price(
+            MOCK_CONTRACT_ADDR,
+            1,
+            "atom",
+            "btc",
+            SwapAmount::In(Uint128::new(2007)),
+        );
+        let EstimatePriceResponse { amount } = app.wrap().query(&query.into()).unwrap();
+        // 6M * 1.5M = 2M * 4.5M -> output = 1.5M
+        let expected = SwapAmount::Out(Uint128::new(1000));
+        assert_eq!(amount, expected);
+
+        // now try the reverse query. we know what we need to pay to get 1.5M out
+        let query = OsmosisQuery::estimate_price(
+            MOCK_CONTRACT_ADDR,
+            1,
+            "atom",
+            "btc",
+            SwapAmount::Out(Uint128::new(1000)),
+        );
+        let EstimatePriceResponse { amount } = app.wrap().query(&query.into()).unwrap();
+        let expected = SwapAmount::In(Uint128::new(2007));
+        assert_eq!(amount, expected);
     }
 }
