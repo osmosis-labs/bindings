@@ -730,4 +730,42 @@ mod tests {
         ];
         assert_eq!(state.assets, expected_assets);
     }
+
+    // TODO: make the following test work
+    #[test]
+    #[ignore]
+    fn estimate_swap_regression() {
+        let pool = Pool::new(coin(2_000_000, "atom"), coin(1_000_000, "btc"));
+
+        // set up with one pool
+        let mut app = OsmosisApp::new();
+        app.init_modules(|router, _, storage| {
+            router.custom.set_pool(storage, 1, &pool).unwrap();
+        });
+
+        // estimate the price (501505 * 0.997 = 500_000) after fees gone
+        let query = OsmosisQuery::estimate_price(
+            MOCK_CONTRACT_ADDR,
+            1,
+            "atom",
+            "btc",
+            SwapAmount::In(Uint128::new(2007)),
+        );
+        let EstimatePriceResponse { amount } = app.wrap().query(&query.into()).unwrap();
+        // 6M * 1.5M = 2M * 4.5M -> output = 1.5M
+        let expected = SwapAmount::Out(Uint128::new(1000));
+        assert_eq!(amount, expected);
+
+        // now try the reverse query. we know what we need to pay to get 1.5M out
+        let query = OsmosisQuery::estimate_price(
+            MOCK_CONTRACT_ADDR,
+            1,
+            "atom",
+            "btc",
+            SwapAmount::Out(Uint128::new(1000)),
+        );
+        let EstimatePriceResponse { amount } = app.wrap().query(&query.into()).unwrap();
+        let expected = SwapAmount::In(Uint128::new(2007));
+        assert_eq!(amount, expected);
+    }
 }
