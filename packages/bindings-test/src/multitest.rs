@@ -698,36 +698,33 @@ mod tests {
                 denom_out: "btc".to_string(),
             }],
             amount: SwapAmountWithLimit::ExactIn {
-                input: Uint128::new(4028),
+                input: Uint128::new(4000),
                 min_output: Uint128::new(900),
             },
         };
         let res = app.execute(trader.clone(), msg.into()).unwrap();
 
         let Coin { amount, .. } = app.wrap().query_balance(&trader, "osmo").unwrap();
-        assert_eq!(amount, Uint128::new(5000 - 4028));
+        assert_eq!(amount, Uint128::new(5000 - 4000));
         let Coin { amount, .. } = app.wrap().query_balance(&trader, "btc").unwrap();
-        assert_eq!(amount, Uint128::new(1000));
+        assert_eq!(amount, Uint128::new(993));
 
         // check the response contains proper value
         let input: EstimatePriceResponse = from_slice(res.data.unwrap().as_slice()).unwrap();
-        assert_eq!(input.amount, SwapAmount::Out(Uint128::new(1000)));
+        assert_eq!(input.amount, SwapAmount::Out(Uint128::new(993)));
 
         // check pool state properly updated with fees
         let query = OsmosisQuery::PoolState { id: 1 }.into();
         let state: PoolStateResponse = app.wrap().query(&query).unwrap();
         let expected_assets = vec![
-            coin(6_000_000 + 4028, "osmo"),
-            coin(3_000_000 - 2007, "atom"),
+            coin(6_000_000 + 4000, "osmo"),
+            coin(3_000_000 - 1993, "atom"),
         ];
         assert_eq!(state.assets, expected_assets);
 
         let query = OsmosisQuery::PoolState { id: 2 }.into();
         let state: PoolStateResponse = app.wrap().query(&query).unwrap();
-        let expected_assets = vec![
-            coin(2_000_000 + 2007, "atom"),
-            coin(1_000_000 - 1000, "btc"),
-        ];
+        let expected_assets = vec![coin(2_000_000 + 1993, "atom"), coin(1_000_000 - 993, "btc")];
         assert_eq!(state.assets, expected_assets);
     }
 
