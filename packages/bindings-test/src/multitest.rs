@@ -100,23 +100,26 @@ impl Pool {
         let (final_in, final_out, payout) = match amount {
             SwapAmount::In(input) => {
                 let input_minus_fee = input * (Decimal::one() - self.fee);
-                let final_out = bal_in * bal_out / (bal_in + input_minus_fee);
-                let payout = SwapAmount::Out(bal_out - final_out);
-                let final_in = bal_in + input;
+                let final_out =
+                    bal_in.checked_mul(bal_out)? / (bal_in.checked_add(input_minus_fee)?);
+                let payout = SwapAmount::Out(bal_out.checked_sub(final_out)?);
+                let final_in = bal_in.checked_add(input)?;
                 (final_in, final_out, payout)
             }
             SwapAmount::Out(output) => {
-                let in_without_fee = bal_in * bal_out / (bal_out - output);
+                let in_without_fee = bal_in.checked_mul(bal_out)? / bal_out.checked_sub(output)?;
                 // add one to handle rounding (final_in - old_in) / (1 - fee)
                 let mult = Decimal::one() - self.fee;
                 // Use this as Uint128 / Decimal is not implemented in cosmwasm_std
-                let pay_incl_fee = (in_without_fee - bal_in) * mult.denominator()
+                let pay_incl_fee = in_without_fee
+                    .checked_sub(bal_in)?
+                    .checked_mul(mult.denominator())?
                     / mult.numerator()
                     + Uint128::new(1);
 
                 let payin = SwapAmount::In(pay_incl_fee);
-                let final_in = bal_in + pay_incl_fee;
-                let final_out = bal_out - output;
+                let final_in = bal_in.checked_add(pay_incl_fee)?;
+                let final_out = bal_out.checked_sub(output)?;
                 (final_in, final_out, payin)
             }
         };
@@ -135,16 +138,18 @@ impl Pool {
         match amount {
             SwapAmountWithLimit::ExactIn { input, min_output } => {
                 let payout = self.swap(denom_in, denom_out, SwapAmount::In(input))?;
-                if payout.as_out() < min_output {
-                    Err(OsmosisError::PriceTooLow)
+                let payout_as = payout.as_out();
+                if payout_as < min_output {
+                    Err(OsmosisError::PriceTooLowExactIn(payout_as, min_output))
                 } else {
                     Ok(payout)
                 }
             }
             SwapAmountWithLimit::ExactOut { output, max_input } => {
                 let payin = self.swap(denom_in, denom_out, SwapAmount::Out(output))?;
-                if payin.as_in() > max_input {
-                    Err(OsmosisError::PriceTooLow)
+                let payin_as = payin.as_in();
+                if payin_as > max_input {
+                    Err(OsmosisError::PriceTooLowExactOut(payin_as, max_input))
                 } else {
                     Ok(payin)
                 }
@@ -266,13 +271,23 @@ impl Module for OsmosisModule {
 
                 match amount {
                     SwapAmountWithLimit::ExactIn { min_output, .. } => {
-                        if swap_result.as_out() < min_output {
-                            return Err(OsmosisError::PriceTooLow.into());
+                        let swap_result_as_out = swap_result.as_out();
+                        if swap_result_as_out < min_output {
+                            return Err(OsmosisError::PriceTooLowExactIn(
+                                swap_result_as_out,
+                                min_output,
+                            )
+                            .into());
                         }
                     }
                     SwapAmountWithLimit::ExactOut { max_input, .. } => {
-                        if swap_result.as_in() > max_input {
-                            return Err(OsmosisError::PriceTooLow.into());
+                        let swap_result_as_in = swap_result.as_in();
+                        if swap_result_as_in > max_input {
+                            return Err(OsmosisError::PriceTooLowExactOut(
+                                swap_result_as_in,
+                                max_input,
+                            )
+                            .into());
                         }
                     }
                 }
@@ -369,11 +384,17 @@ pub enum OsmosisError {
     #[error("{0}")]
     Std(#[from] StdError),
 
+    #[error("{0}")]
+    Overlow(#[from] cosmwasm_std::OverflowError),
+
     #[error("Asset not in pool")]
     AssetNotInPool,
 
-    #[error("Price under minimum requested, aborting swap")]
-    PriceTooLow,
+    #[error("Aborting swap - payout: {0} is smaller then minimal output: {1}")]
+    PriceTooLowExactIn(Uint128, Uint128),
+
+    #[error("Aborting swap - payin: {0} is bigger then maximum input: {1}")]
+    PriceTooLowExactOut(Uint128, Uint128),
 
     /// Remove this to let the compiler find all TODOs
     #[error("Not yet implemented (TODO)")]
@@ -641,7 +662,7 @@ mod tests {
         let err = app.execute(trader, msg.into()).unwrap_err();
         assert_eq!(
             err.downcast::<OsmosisError>().unwrap(),
-            OsmosisError::PriceTooLow
+            OsmosisError::PriceTooLowExactOut(Uint128::new(4033), Uint128::new(4000))
         );
     }
 
@@ -679,7 +700,7 @@ mod tests {
         let err = app.execute(trader, msg.into()).unwrap_err();
         assert_eq!(
             err.downcast::<OsmosisError>().unwrap(),
-            OsmosisError::PriceTooLow
+            OsmosisError::PriceTooLowExactIn(Uint128::new(993), Uint128::new(1000))
         );
     }
 
