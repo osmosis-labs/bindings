@@ -385,7 +385,7 @@ pub enum OsmosisError {
     Std(#[from] StdError),
 
     #[error("{0}")]
-    Overlow(#[from] cosmwasm_std::OverflowError),
+    Overflow(#[from] cosmwasm_std::OverflowError),
 
     #[error("Asset not in pool")]
     AssetNotInPool,
