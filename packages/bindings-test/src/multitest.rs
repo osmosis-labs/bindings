@@ -309,7 +309,9 @@ impl Module for OsmosisModule {
                     data,
                     events: vec![],
                 })
-            }
+            },
+            OsmosisMsg::LockTokens { tokens: _, duration: _ } => unimplemented!()
+
         }
     }
 
