@@ -4,7 +4,8 @@ use std::fs::create_dir_all;
 use cosmwasm_schema::{export_schema, remove_schemas, schema_for};
 
 use osmo_bindings::{
-    EstimatePriceResponse, OsmosisMsg, OsmosisQuery, PoolStateResponse, SpotPriceResponse,
+    EstimatePriceResponse, FullDenomResponse, OsmosisMsg, OsmosisQuery, PoolStateResponse,
+    SpotPriceResponse,
 };
 
 fn main() {
@@ -15,6 +16,7 @@ fn main() {
 
     export_schema(&schema_for!(OsmosisMsg), &out_dir);
     export_schema(&schema_for!(OsmosisQuery), &out_dir);
+    export_schema(&schema_for!(FullDenomResponse), &out_dir);
     export_schema(&schema_for!(PoolStateResponse), &out_dir);
     export_schema(&schema_for!(SpotPriceResponse), &out_dir);
     export_schema(&schema_for!(EstimatePriceResponse), &out_dir);
