@@ -21,7 +21,7 @@ pub enum OsmosisMsg {
         recipient: String,
     },
     /// Swap over one or more pools
-    /// Returns EstimatePriceResponse in the data field of the Response
+    /// Returns SwapResponse in the data field of the Response
     Swap {
         first: Swap,
         route: Vec<Step>,

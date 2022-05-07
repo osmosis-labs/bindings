@@ -44,7 +44,7 @@ impl OsmosisQuery {
     }
 
     /// Basic helper to estimate price of a swap on one pool
-    pub fn estimate_price(
+    pub fn estimate_swap(
         contract: impl Into<String>,
         pool_id: u64,
         denom_in: impl Into<String>,
@@ -102,7 +102,7 @@ pub struct SpotPriceResponse {
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
-pub struct EstimatePriceResponse {
+pub struct SwapResponse {
     // If you query with SwapAmount::Input, this is SwapAmount::Output
     // If you query with SwapAmount::Output, this is SwapAmount::Input
     pub amount: SwapAmount,
