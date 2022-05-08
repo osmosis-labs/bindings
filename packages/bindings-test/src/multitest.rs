@@ -20,8 +20,8 @@ use cw_multi_test::{
 use cw_storage_plus::Map;
 
 use osmo_bindings::{
-    EstimatePriceResponse, FullDenomResponse, OsmosisMsg, OsmosisQuery, PoolStateResponse,
-    SpotPriceResponse, Step, Swap, SwapAmount, SwapAmountWithLimit,
+    FullDenomResponse, OsmosisMsg, OsmosisQuery, PoolStateResponse, SpotPriceResponse, Step, Swap,
+    SwapAmount, SwapAmountWithLimit, SwapResponse,
 };
 
 pub const POOLS: Map<u64, Pool> = Map::new("pools");
@@ -329,7 +329,7 @@ impl Module for OsmosisModule {
                     SwapAmountWithLimit::ExactIn { .. } => SwapAmount::Out(get_out),
                     SwapAmountWithLimit::ExactOut { .. } => SwapAmount::In(pay_in),
                 };
-                let data = Some(to_binary(&EstimatePriceResponse { amount: output })?);
+                let data = Some(to_binary(&SwapResponse { amount: output })?);
                 Ok(AppResponse {
                     data,
                     events: vec![],
@@ -392,7 +392,7 @@ impl Module for OsmosisModule {
             } => {
                 let (amount, _) = complex_swap(storage, first, route, amount)?;
 
-                Ok(to_binary(&EstimatePriceResponse { amount })?)
+                Ok(to_binary(&SwapResponse { amount })?)
             }
         }
     }
@@ -594,27 +594,27 @@ mod tests {
         });
 
         // estimate the price (501505 * 0.997 = 500_000) after fees gone
-        let query = OsmosisQuery::estimate_price(
+        let query = OsmosisQuery::estimate_swap(
             MOCK_CONTRACT_ADDR,
             pool_id,
             &coin_b.denom,
             &coin_a.denom,
             SwapAmount::In(Uint128::new(501505)),
         );
-        let EstimatePriceResponse { amount } = app.wrap().query(&query.into()).unwrap();
+        let SwapResponse { amount } = app.wrap().query(&query.into()).unwrap();
         // 6M * 1.5M = 2M * 4.5M -> output = 1.5M
         let expected = SwapAmount::Out(Uint128::new(1_500_000));
         assert_eq!(amount, expected);
 
         // now try the reverse query. we know what we need to pay to get 1.5M out
-        let query = OsmosisQuery::estimate_price(
+        let query = OsmosisQuery::estimate_swap(
             MOCK_CONTRACT_ADDR,
             pool_id,
             &coin_b.denom,
             &coin_a.denom,
             SwapAmount::Out(Uint128::new(1500000)),
         );
-        let EstimatePriceResponse { amount } = app.wrap().query(&query.into()).unwrap();
+        let SwapResponse { amount } = app.wrap().query(&query.into()).unwrap();
         let expected = SwapAmount::In(Uint128::new(501505));
         assert_eq!(amount, expected);
     }
@@ -675,7 +675,7 @@ mod tests {
         assert_eq!(amount, Uint128::new(298_495));
 
         // check the response contains proper value
-        let input: EstimatePriceResponse = from_slice(res.data.unwrap().as_slice()).unwrap();
+        let input: SwapResponse = from_slice(res.data.unwrap().as_slice()).unwrap();
         assert_eq!(input.amount, SwapAmount::In(Uint128::new(501_505)));
 
         // check pool state properly updated with fees
@@ -842,7 +842,7 @@ mod tests {
         assert_eq!(amount, Uint128::new(1000));
 
         // check the response contains proper value
-        let input: EstimatePriceResponse = from_slice(res.data.unwrap().as_slice()).unwrap();
+        let input: SwapResponse = from_slice(res.data.unwrap().as_slice()).unwrap();
         assert_eq!(input.amount, SwapAmount::In(Uint128::new(4033)));
 
         // check pool state properly updated with fees
@@ -904,7 +904,7 @@ mod tests {
         assert_eq!(amount, Uint128::new(993));
 
         // check the response contains proper value
-        let input: EstimatePriceResponse = from_slice(res.data.unwrap().as_slice()).unwrap();
+        let input: SwapResponse = from_slice(res.data.unwrap().as_slice()).unwrap();
         assert_eq!(input.amount, SwapAmount::Out(Uint128::new(993)));
 
         // check pool state properly updated with fees
@@ -935,27 +935,27 @@ mod tests {
         });
 
         // estimate the price (501505 * 0.997 = 500_000) after fees gone
-        let query = OsmosisQuery::estimate_price(
+        let query = OsmosisQuery::estimate_swap(
             MOCK_CONTRACT_ADDR,
             1,
             "atom",
             "btc",
             SwapAmount::In(Uint128::new(2007)),
         );
-        let EstimatePriceResponse { amount } = app.wrap().query(&query.into()).unwrap();
+        let SwapResponse { amount } = app.wrap().query(&query.into()).unwrap();
         // 6M * 1.5M = 2M * 4.5M -> output = 1.5M
         let expected = SwapAmount::Out(Uint128::new(1000));
         assert_eq!(amount, expected);
 
         // now try the reverse query. we know what we need to pay to get 1.5M out
-        let query = OsmosisQuery::estimate_price(
+        let query = OsmosisQuery::estimate_swap(
             MOCK_CONTRACT_ADDR,
             1,
             "atom",
             "btc",
             SwapAmount::Out(Uint128::new(1000)),
         );
-        let EstimatePriceResponse { amount } = app.wrap().query(&query.into()).unwrap();
+        let SwapResponse { amount } = app.wrap().query(&query.into()).unwrap();
         let expected = SwapAmount::In(Uint128::new(2007));
         assert_eq!(amount, expected);
     }
