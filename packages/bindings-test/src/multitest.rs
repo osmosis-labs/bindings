@@ -177,7 +177,9 @@ pub const BLOCK_TIME: u64 = 5;
 
 impl OsmosisModule {
     fn build_denom(&self, contract: &Addr, sub_denom: &str) -> String {
-        // TODO: validation assertion on sub_denom
+        // TODO: validation assertion on the full denom.
+        // https://github.com/cosmos/cosmos-sdk/blob/2646b474c7beb0c93d4fafd395ef345f41afc251/types/coin.go#L706-L711
+        // Plus, the address must not contain the separator ('/') string.
         format!("factory/{}/{}", contract, sub_denom)
     }
 
