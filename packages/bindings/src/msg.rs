@@ -18,6 +18,7 @@ pub enum OsmosisMsg {
         /// Can be up to 128 - prefix length (currently 7) - bech32 address length (4 (osmo) + 39) - number of separators (2) =
         /// 76 "alphanumeric" (https://github.com/cosmos/cosmos-sdk/blob/2646b474c7beb0c93d4fafd395ef345f41afc251/types/coin.go#L677)
         /// characters long.
+        /// Empty sub-denoms are valid. The token will then be prefix + contract address, i.e. "factory/<bech32 address>/"
         sub_denom: String,
         amount: Uint128,
         recipient: String,
