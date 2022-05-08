@@ -178,7 +178,7 @@ pub const BLOCK_TIME: u64 = 5;
 impl OsmosisModule {
     fn build_denom(&self, contract: &Addr, sub_denom: &str) -> String {
         // TODO: validation assertion on sub_denom
-        format!("cw/{}/{}", contract, sub_denom)
+        format!("factory/{}/{}", contract, sub_denom)
     }
 
     /// Used to mock out the response for TgradeQuery::ValidatorVotes
