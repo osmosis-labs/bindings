@@ -14,8 +14,10 @@ pub enum OsmosisMsg {
     /// of independent sub-denoms.
     /// Returns FullDenomResponse in the data field of the Response
     MintTokens {
-        /// Must be 2-32 alphanumeric characters
-        /// FIXME: revisit actual requirements in SDK
+        /// sub_denoms (nonces in Osmosis) are validated as part of the full denomination.
+        /// Can be up to 128 - prefix length (currently 7) - bech32 address length (4 (osmo) + 39) - number of separators (2) =
+        /// 76 "alphanumeric" (https://github.com/cosmos/cosmos-sdk/blob/2646b474c7beb0c93d4fafd395ef345f41afc251/types/coin.go#L677)
+        /// characters long.
         sub_denom: String,
         amount: Uint128,
         recipient: String,
