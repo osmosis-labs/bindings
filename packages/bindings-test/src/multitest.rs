@@ -19,6 +19,7 @@ use cw_multi_test::{
 };
 use cw_storage_plus::Map;
 
+use crate::error::ContractError;
 use osmo_bindings::{
     FullDenomResponse, OsmosisMsg, OsmosisQuery, PoolStateResponse, SpotPriceResponse, Step, Swap,
     SwapAmount, SwapAmountWithLimit, SwapResponse,
@@ -176,11 +177,15 @@ pub struct OsmosisModule {}
 pub const BLOCK_TIME: u64 = 5;
 
 impl OsmosisModule {
-    fn build_denom(&self, contract: &Addr, sub_denom: &str) -> String {
-        // TODO: validation assertion on the full denom.
+    fn build_denom(&self, contract: &Addr, sub_denom: &str) -> Result<String, ContractError> {
+        // Minimum validation checks on the full denom.
         // https://github.com/cosmos/cosmos-sdk/blob/2646b474c7beb0c93d4fafd395ef345f41afc251/types/coin.go#L706-L711
-        // Plus, the address must not contain the separator ('/') string.
-        format!("factory/{}/{}", contract, sub_denom)
+        // https://github.com/cosmos/cosmos-sdk/blob/2646b474c7beb0c93d4fafd395ef345f41afc251/types/coin.go#L677
+        let full_denom = format!("factory/{}/{}", contract, sub_denom);
+        if full_denom.len() < 3 || full_denom.len() > 128 || contract.as_str().contains('/') {
+            return Err(ContractError::InvalidFullDenom { full_denom });
+        }
+        Ok(full_denom)
     }
 
     /// Used to mock out the response for TgradeQuery::ValidatorVotes
@@ -261,7 +266,7 @@ impl Module for OsmosisModule {
                 amount,
                 recipient,
             } => {
-                let denom = self.build_denom(&sender, &sub_denom);
+                let denom = self.build_denom(&sender, &sub_denom)?;
                 let mint = BankSudo::Mint {
                     to_address: recipient,
                     amount: coins(amount.u128(), &denom),
@@ -367,7 +372,7 @@ impl Module for OsmosisModule {
                 sub_denom,
             } => {
                 let contract = api.addr_validate(&contract)?;
-                let denom = self.build_denom(&contract, &sub_denom);
+                let denom = self.build_denom(&contract, &sub_denom)?;
                 let res = FullDenomResponse { denom };
                 Ok(to_binary(&res)?)
             }
