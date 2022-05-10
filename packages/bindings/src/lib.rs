@@ -3,7 +3,9 @@ mod query;
 mod types;
 
 pub use msg::OsmosisMsg;
-pub use query::{EstimatePriceResponse, OsmosisQuery, PoolStateResponse, SpotPriceResponse};
+pub use query::{
+    FullDenomResponse, OsmosisQuery, PoolStateResponse, SpotPriceResponse, SwapResponse,
+};
 pub use types::{Step, Swap, SwapAmount, SwapAmountWithLimit};
 
 // This is a signal, such that any contract that imports these helpers will only run on the
