@@ -15,7 +15,8 @@ use cosmwasm_std::{
     Fraction, Isqrt, Querier, QuerierResult, StdError, StdResult, Storage, Uint128,
 };
 use cw_multi_test::{
-    App, AppResponse, BankKeeper, BankSudo, BasicAppBuilder, CosmosRouter, Module, WasmKeeper,
+    App, AppResponse, BankKeeper, BankSudo, BasicAppBuilder, CosmosRouter, Executor, Module,
+    WasmKeeper,
 };
 use cw_storage_plus::Map;
 
@@ -309,9 +310,8 @@ impl Module for OsmosisModule {
                     data,
                     events: vec![],
                 })
-            },
-            OsmosisMsg::LockTokens { tokens: _, duration: _ } => unimplemented!()
-
+            }
+            OsmosisMsg::LockTokens { .. } => unimplemented!(),
         }
     }
 
