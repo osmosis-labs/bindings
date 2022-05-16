@@ -311,7 +311,10 @@ impl Module for OsmosisModule {
                     events: vec![],
                 })
             }
-            OsmosisMsg::LockTokens { .. } => unimplemented!(),
+            OsmosisMsg::LockTokens { .. } => Ok(AppResponse {
+                data: None,
+                events: vec![],
+            }),
         }
     }
 
