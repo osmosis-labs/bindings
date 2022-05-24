@@ -341,10 +341,14 @@ impl Module for OsmosisModule {
                     events: vec![],
                 })
             }
+            OsmosisMsg::JoinPool { .. } => todo!(),
+            OsmosisMsg::ExitPool { .. } => todo!(),
             OsmosisMsg::LockTokens { .. } => Ok(AppResponse {
                 data: None,
                 events: vec![],
             }),
+            OsmosisMsg::BeginUnlocking { .. } => todo!(),
+            OsmosisMsg::BeginUnlockingAll {} => todo!(),
         }
     }
 
@@ -404,6 +408,7 @@ impl Module for OsmosisModule {
 
                 Ok(to_binary(&SwapResponse { amount })?)
             }
+            OsmosisQuery::LockedTokens { .. } => todo!(),
         }
     }
 }
@@ -418,7 +423,6 @@ pub enum OsmosisError {
 
     #[error("Price under minimum requested, aborting swap")]
     PriceTooLow,
-
     /// Remove this to let the compiler find all TODOs
     #[error("Not yet implemented (TODO)")]
     Unimplemented,

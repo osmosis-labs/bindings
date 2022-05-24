@@ -1,8 +1,10 @@
+use std::time::Duration;
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::types::{Step, Swap, SwapAmount};
-use cosmwasm_std::{Coin, CustomQuery, Decimal, Uint128};
+use cosmwasm_std::{Addr, Coin, CustomQuery, Decimal, Uint128};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -30,6 +32,8 @@ pub enum OsmosisQuery {
         route: Vec<Step>,
         amount: SwapAmount,
     },
+    /// Returns all bonded tokens for a an address
+    LockedTokens { owner: Addr },
 }
 
 impl CustomQuery for OsmosisQuery {}
@@ -106,4 +110,23 @@ pub struct SwapResponse {
     // If you query with SwapAmount::Input, this is SwapAmount::Output
     // If you query with SwapAmount::Output, this is SwapAmount::Input
     pub amount: SwapAmount,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct Lock {
+    // An id representing the lock
+    pub id: String,
+    // The coins contained in the lock. This will usually be of length one, but
+    // the underlying Osmosis API allows for creating a list
+    pub coins: Vec<Coin>,
+    // The duration for which the tokens were locked
+    pub duration: Duration,
+    // If the tokens are unbonding, this will be the time when the unbonding ends. Otherwise it will be None
+    pub end_time: Option<String>,
+}
+
+impl Lock {
+    pub fn is_unbonding(&self) -> bool {
+        self.end_time.is_none()
+    }
 }

@@ -7,8 +7,10 @@ use cosmwasm_std::{CosmosMsg, CustomMsg, Uint128};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 #[serde(rename_all = "snake_case")]
+
 /// A number of Custom messages that can call into the Osmosis bindings
 pub enum OsmosisMsg {
+    // Mint module messages
     /// Contracts can mint native tokens that have an auto-generated denom
     /// namespaced under the contract's address. A contract may create any number
     /// of independent sub-denoms.
@@ -23,6 +25,7 @@ pub enum OsmosisMsg {
         amount: Uint128,
         recipient: String,
     },
+    // GAMM Module messages
     /// Swap over one or more pools
     /// Returns SwapResponse in the data field of the Response
     Swap {
@@ -30,17 +33,45 @@ pub enum OsmosisMsg {
         route: Vec<Step>,
         amount: SwapAmountWithLimit,
     },
-
+    JoinPool {
+        pool_id: Uint128,
+        amount: SwapAmountWithLimit,
+    },
+    ExitPool {},
+    // Lockup module messages
+    /// Bond gamm tokens for a duration to generate rewards
     LockTokens {
+        /// Only pool tokens are valid here (e.g.: "gamm/pool/1")
         denom: String,
         amount: Uint128,
-        duration: String
+        /// The duration in seconds
+        lock_duration: String,
     },
+    /// Unbond locked gamm tokens
+    BeginUnlocking {
+        denom: String,
+        amount: Uint128,
+        lock_duration: String,
+    },
+    /// Unbond all locked gamm tokens
+    BeginUnlockingAll {},
 }
 
 impl OsmosisMsg {
     /// Basic helper to define a swap with one pool
     pub fn simple_swap(
+        pool_id: u64,
+        denom_in: impl Into<String>,
+        denom_out: impl Into<String>,
+        amount: SwapAmountWithLimit,
+    ) -> Self {
+        OsmosisMsg::Swap {
+            first: Swap::new(pool_id, denom_in, denom_out),
+            amount,
+            route: vec![],
+        }
+    }
+    pub fn join_pool(
         pool_id: u64,
         denom_in: impl Into<String>,
         denom_out: impl Into<String>,
