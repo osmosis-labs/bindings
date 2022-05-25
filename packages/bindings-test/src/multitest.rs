@@ -261,6 +261,15 @@ impl Module for OsmosisModule {
         QueryC: CustomQuery + DeserializeOwned + 'static,
     {
         match msg {
+            OsmosisMsg::CreateDenom { sub_denom } => {
+                // TODO: Simulate denom creation, and add existence checks in MintTokens
+                let denom = self.build_denom(&sender, &sub_denom)?;
+                let data = Some(to_binary(&FullDenomResponse { denom })?);
+                Ok(AppResponse {
+                    data,
+                    events: vec![],
+                })
+            }
             OsmosisMsg::MintTokens {
                 sub_denom,
                 amount,
