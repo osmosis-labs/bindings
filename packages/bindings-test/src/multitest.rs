@@ -364,9 +364,11 @@ impl Module for OsmosisModule {
                     .map(|i| i.unwrap())
                     .max()
                     .unwrap_or(0);
-                println!("MAX_ID: {:?}", max_id);
                 let id = max_id + 1;
-                let duration = Duration::from_secs(duration.parse::<u64>()?);
+                let secs = duration
+                    .parse::<u64>()
+                    .or(Err(OsmosisError::InvalidDuration))?;
+                let duration = Duration::from_secs(secs);
                 let coin = Coin::new(amount.into(), denom);
                 let lock = Lock {
                     id,
@@ -461,6 +463,9 @@ pub enum OsmosisError {
 
     #[error("Price under minimum requested, aborting swap")]
     PriceTooLow,
+
+    #[error("Invalid duration, aborting lock")]
+    InvalidDuration,
 
     /// Remove this to let the compiler find all TODOs
     #[error("Not yet implemented (TODO)")]
@@ -1037,14 +1042,14 @@ mod tests {
         assert_eq!(amount, Uint128::new(800_000));
 
         // this is too low a payment, will error
-        // ToDo: Add errors to the mock
-        // let msg = OsmosisMsg::LockTokens {
-        //     denom: pool_denom,
-        //     amount,
-        //     duration: "".to_string()
-        // };
-        // let err = app.execute(trader.clone(), msg.into()).unwrap_err();
-        // println!("{:?}", err);
+        // ToDo: Add more errors handling to the mock
+        let msg = OsmosisMsg::LockTokens {
+            denom: pool_denom.to_string(),
+            amount,
+            duration: "".to_string(),
+        };
+        let err = app.execute(lp.clone(), msg.into()).unwrap_err();
+        println!("{:?}", err);
 
         // now a proper lock
         let msg = OsmosisMsg::LockTokens {
