@@ -73,3 +73,8 @@ impl SwapAmountWithLimit {
         }
     }
 }
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct LockTokensResponse {
+    pub id: u64,
+}

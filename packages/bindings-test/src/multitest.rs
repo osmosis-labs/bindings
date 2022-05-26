@@ -7,12 +7,13 @@ use std::cmp::max;
 use std::fmt::Debug;
 use std::iter;
 use std::ops::{Deref, DerefMut};
+use std::time::Duration;
 use thiserror::Error;
 
 use cosmwasm_std::testing::{MockApi, MockStorage};
 use cosmwasm_std::{
     coins, to_binary, Addr, Api, BankMsg, Binary, BlockInfo, Coin, CustomQuery, Decimal, Empty,
-    Fraction, Isqrt, Querier, QuerierResult, StdError, StdResult, Storage, Uint128,
+    Fraction, Isqrt, Querier, QuerierResult, StdError, StdResult, Storage, Timestamp, Uint128,
 };
 use cw_multi_test::{
     App, AppResponse, BankKeeper, BankSudo, BasicAppBuilder, CosmosRouter, Executor, Module,
@@ -22,11 +23,23 @@ use cw_storage_plus::Map;
 
 use crate::error::ContractError;
 use osmo_bindings::{
-    FullDenomResponse, OsmosisMsg, OsmosisQuery, PoolStateResponse, SpotPriceResponse, Step, Swap,
-    SwapAmount, SwapAmountWithLimit, SwapResponse,
+    FullDenomResponse, LockTokensResponse, OsmosisMsg, OsmosisQuery, PoolStateResponse,
+    SpotPriceResponse, Step, Swap, SwapAmount, SwapAmountWithLimit, SwapResponse,
 };
 
 pub const POOLS: Map<u64, Pool> = Map::new("pools");
+pub const LOCKS: Map<u64, Lock> = Map::new("locks");
+
+pub const LOCK_MODULE_ADDR: &'static str = "lockup";
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct Lock {
+    pub id: u64,
+    pub owner: Addr,
+    pub duration: Duration,
+    pub endtime: Timestamp,
+    pub coins: Vec<Coin>,
+}
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 pub struct Pool {
@@ -341,10 +354,40 @@ impl Module for OsmosisModule {
                     events: vec![],
                 })
             }
-            OsmosisMsg::LockTokens { .. } => Ok(AppResponse {
-                data: None,
-                events: vec![],
-            }),
+            OsmosisMsg::LockTokens {
+                denom,
+                amount,
+                duration,
+            } => {
+                let max_id = LOCKS
+                    .keys(storage, None, None, cosmwasm_std::Order::Ascending)
+                    .map(|i| i.unwrap())
+                    .max()
+                    .unwrap_or(0);
+                println!("MAX_ID: {:?}", max_id);
+                let id = max_id + 1;
+                let duration = Duration::from_secs(duration.parse::<u64>()?);
+                let coin = Coin::new(amount.into(), denom);
+                let lock = Lock {
+                    id,
+                    owner: sender.clone(),
+                    duration: duration.clone(),
+                    endtime: block.time.plus_seconds(duration.as_secs()),
+                    coins: vec![coin.clone()],
+                };
+                LOCKS.save(storage, id, &lock)?;
+                let lock_msg = BankMsg::Send {
+                    to_address: LOCK_MODULE_ADDR.to_string(),
+                    amount: vec![coin.clone()],
+                };
+                router.execute(api, storage, block, sender.clone(), lock_msg.into())?;
+
+                let data = Some(to_binary(&LockTokensResponse { id })?);
+                Ok(AppResponse {
+                    data,
+                    events: vec![],
+                })
+            }
         }
     }
 
@@ -968,5 +1011,53 @@ mod tests {
         let SwapResponse { amount } = app.wrap().query(&query.into()).unwrap();
         let expected = SwapAmount::In(Uint128::new(2007));
         assert_eq!(amount, expected);
+    }
+
+    #[test]
+    fn perform_lock() {
+        let coin_a = coin(6_000_000u128, "osmo");
+        let coin_b = coin(1_500_000u128, "atom");
+        let pool_id = 43;
+        let pool = Pool::new(coin_a.clone(), coin_b.clone());
+        let lp = Addr::unchecked("lp_addr");
+        let pool_denom = "gamm/pool/1";
+
+        // set up with one pool
+        let mut app = OsmosisApp::new();
+        app.init_modules(|router, _, storage| {
+            router.custom.set_pool(storage, pool_id, &pool).unwrap();
+            router
+                .bank
+                .init_balance(storage, &lp, coins(800_000, pool_denom))
+                .unwrap()
+        });
+
+        // check balance before
+        let Coin { amount, .. } = app.wrap().query_balance(&lp, pool_denom).unwrap();
+        assert_eq!(amount, Uint128::new(800_000));
+
+        // this is too low a payment, will error
+        // ToDo: Add errors to the mock
+        // let msg = OsmosisMsg::LockTokens {
+        //     denom: pool_denom,
+        //     amount,
+        //     duration: "".to_string()
+        // };
+        // let err = app.execute(trader.clone(), msg.into()).unwrap_err();
+        // println!("{:?}", err);
+
+        // now a proper lock
+        let msg = OsmosisMsg::LockTokens {
+            denom: pool_denom.to_string(),
+            amount,
+            duration: "3600".to_string(),
+        };
+        let _res = app.execute(lp.clone(), msg.into()).unwrap();
+
+        // update balances (800_000 - 501_505 paid = 298_495)
+        let Coin { amount, .. } = app.wrap().query_balance(&lp, pool_denom).unwrap();
+        assert_eq!(amount, Uint128::new(0));
+
+        // ToDo: Add the lockup queries so that the state can be checked via messages
     }
 }

@@ -34,7 +34,7 @@ pub enum OsmosisMsg {
     LockTokens {
         denom: String,
         amount: Uint128,
-        duration: String
+        duration: String,
     },
 }
 
