@@ -182,8 +182,12 @@ impl OsmosisModule {
         // https://github.com/cosmos/cosmos-sdk/blob/2646b474c7beb0c93d4fafd395ef345f41afc251/types/coin.go#L706-L711
         // https://github.com/cosmos/cosmos-sdk/blob/2646b474c7beb0c93d4fafd395ef345f41afc251/types/coin.go#L677
         let full_denom = format!("factory/{}/{}", creator, subdenom);
-        if full_denom.len() < 3 || full_denom.len() > 128 || creator.as_str().contains('/') 
-            || subdenom.len() > 44 || creator.as_str().len() > 75 {
+        if full_denom.len() < 3
+            || full_denom.len() > 128
+            || creator.as_str().contains('/')
+            || subdenom.len() > 44
+            || creator.as_str().len() > 75
+        {
             return Err(ContractError::InvalidFullDenom { full_denom });
         }
         Ok(full_denom)
@@ -295,21 +299,17 @@ impl Module for OsmosisModule {
                 denom: _,
                 amount: _,
                 burn_from_address: _,
-            } => {
-                Ok(AppResponse {
-                    data: None,
-                    events: vec![],
-                })
-            }
+            } => Ok(AppResponse {
+                data: None,
+                events: vec![],
+            }),
             OsmosisMsg::ChangeAdmin {
                 denom: _denom,
-                new_admin_address: _new_admin_address
-            } => {
-                Ok(AppResponse {
-                    data: None,
-                    events: vec![],
-                })
-            }
+                new_admin_address: _new_admin_address,
+            } => Ok(AppResponse {
+                data: None,
+                events: vec![],
+            }),
             OsmosisMsg::Swap {
                 first,
                 route,
