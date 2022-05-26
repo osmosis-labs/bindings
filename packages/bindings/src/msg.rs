@@ -25,15 +25,15 @@ pub enum OsmosisMsg {
         new_admin_address: String,
     },
     /// Contracts can mint native tokens for an existing factory denom
-	/// that they are the admin of.
+    /// that they are the admin of.
     MintTokens {
         denom: String,
         amount: Uint128,
         mint_to_address: String,
     },
-	/// Contracts can burn native tokens for an existing factory denom
-	/// that they are the admin of.
-	/// Currently, the burn from address must be the admin contract.
+    /// Contracts can burn native tokens for an existing factory denom
+    /// that they are the admin of.
+    /// Currently, the burn from address must be the admin contract.
     BurnTokens {
         denom: String,
         amount: Uint128,
@@ -64,7 +64,11 @@ impl OsmosisMsg {
     }
 
     pub fn burn_contract_tokens(denom: String, amount: Uint128) -> Self {
-        OsmosisMsg::BurnTokens { denom, amount, burn_from_address: "".to_string() }
+        OsmosisMsg::BurnTokens {
+            denom,
+            amount,
+            burn_from_address: "".to_string(),
+        }
     }
 }
 
