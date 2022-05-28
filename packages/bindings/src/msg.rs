@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::types::SwapAmountWithLimit;
 use crate::{Step, Swap};
-use cosmwasm_std::{CosmosMsg, CustomMsg, Uint128};
+use cosmwasm_std::{CosmosMsg, CustomMsg, Uint128, WasmMsg, StdResult, Binary, to_binary};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -63,13 +63,37 @@ impl OsmosisMsg {
         }
     }
 
-    pub fn burn_contract_tokens(denom: String, amount: Uint128) -> Self {
+    pub fn burn_contract_tokens(denom: String, amount: Uint128, burn_from_address: String) -> Self {
         OsmosisMsg::BurnTokens {
             denom,
             amount,
-            burn_from_address: "".to_string(),
+            burn_from_address,
         }
     }
+
+    /// serializes the message
+    pub fn into_binary(self) -> StdResult<Binary> {
+        let msg = ReceiverExecuteMsg::Receive(self);
+        to_binary(&msg)
+    }
+
+    /// creates a cosmos_msg sending this struct to the named contract
+    pub fn into_cosmos_msg<T: Into<String>>(self, contract_addr: T) -> StdResult<CosmosMsg> {
+        let msg = self.into_binary()?;
+        let execute = WasmMsg::Execute {
+            contract_addr: contract_addr.into(),
+            msg,
+            funds: vec![],
+        };
+        Ok(execute.into())
+    }
+}
+
+// This is just a helper to properly serialize the above message
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+#[serde(rename_all = "snake_case")]
+enum ReceiverExecuteMsg {
+    Receive(OsmosisMsg),
 }
 
 impl From<OsmosisMsg> for CosmosMsg<OsmosisMsg> {

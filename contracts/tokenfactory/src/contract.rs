@@ -8,7 +8,7 @@ use cw2::set_contract_version;
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, GetDenomResponse, InstantiateMsg, QueryMsg};
 use crate::state::{State, STATE};
-use osmo_bindings::{OsmosisMsg, OsmosisQuery};
+use osmo_bindings::{OsmosisMsg, OsmosisQuery };
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:tokenfactory-demo";
@@ -38,7 +38,7 @@ pub fn execute(
     _env: Env,
     info: MessageInfo,
     msg: ExecuteMsg,
-) -> Result<Response, ContractError> {
+) -> Result<Response<OsmosisMsg>, ContractError> {
     match msg {
         ExecuteMsg::CreateDenom { subdenom } => create_denom(deps, subdenom),
         ExecuteMsg::ChangeAdmin {
@@ -58,32 +58,16 @@ pub fn execute(
     }
 }
 
-pub fn create_denom(deps: DepsMut, denom: String) -> Result<Response, ContractError> {
-    STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
-        Ok(state)
-    })?;
-
-    let msg = OsmosisMsg::CreateDenom { subdenom: denom };
-
-    // let subMsg = SubMsg::reply_on_success(msg, 1);
-
-    // let res = Response::new()
-    // .add_submessage(subMsg)
-    // .add_attribute("action", "create_pair");
-
-    Ok(Response::new())
+pub fn create_denom(deps: DepsMut, denom: String) -> Result<Response<OsmosisMsg>, ContractError> {
+    Ok(Response::default())
 }
 
 pub fn change_admin(
     deps: DepsMut,
     denom: String,
     new_admin_address: String,
-) -> Result<Response, ContractError> {
-    STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
-        Ok(state)
-    })?;
-
-    Ok(Response::new().add_attribute("method", "change_admin"))
+) -> Result<Response<OsmosisMsg>, ContractError> {
+    Ok(Response::default())
 }
 
 pub fn mint_tokens(
@@ -91,25 +75,25 @@ pub fn mint_tokens(
     denom: String,
     amount: Uint128,
     mint_to_address: String,
-) -> Result<Response, ContractError> {
-    STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
-        Ok(state)
-    })?;
-
-    Ok(Response::new().add_attribute("method", "mint_tokens"))
+) -> Result<Response<OsmosisMsg>, ContractError> {
+    Ok(Response::default())
 }
 
 pub fn burn_tokens(
     deps: DepsMut,
     denom: String,
     amount: Uint128,
-    mint_to_address: String,
-) -> Result<Response, ContractError> {
+    burn_from_address: String,
+) -> Result<Response<OsmosisMsg>, ContractError> {
     STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
         Ok(state)
     })?;
 
-    Ok(Response::new().add_attribute("method", "burn_tokens"))
+    let burn_token_msg = OsmosisMsg::burn_contract_tokens(denom, amount, burn_from_address);
+
+    let res = Response::new().add_attribute("method", "burn_tokens").add_message(<OsmosisMsg>::from(burn_token_msg));
+
+    Ok(res)
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -123,7 +107,6 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 }
 
 fn get_denom(deps: Deps, creator_address: String, subdenom: String) -> StdResult<GetDenomResponse> {
-    let state = STATE.load(deps.storage)?;
     Ok(GetDenomResponse {
         full_denom: String::from("mycustomdenom"),
         owner: String::from("mycustomdenom"),
