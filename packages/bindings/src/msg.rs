@@ -11,19 +11,37 @@ use cosmwasm_std::{CosmosMsg, CustomMsg, Uint128};
 /// A number of Custom messages that can call into the Osmosis bindings
 pub enum OsmosisMsg {
     // Mint module messages
-    /// Contracts can mint native tokens that have an auto-generated denom
-    /// namespaced under the contract's address. A contract may create any number
-    /// of independent sub-denoms.
-    /// Returns FullDenomResponse in the data field of the Response
+    /// CreateDenom creates a new factory denom, of denomination:
+    /// factory/{creating contract bech32 address}/{Subdenom}
+    /// Subdenom can be of length at most 44 characters, in [0-9a-zA-Z./]
+    /// Empty subdenoms are valid.
+    /// The (creating contract address, subdenom) pair must be unique.
+    /// The created denom's admin is the creating contract address,
+    /// but this admin can be changed using the UpdateAdmin binding.
+    CreateDenom {
+        subdenom: String,
+    },
+    /// ChangeAdmin changes the admin for a factory denom.
+    /// Can only be called by the current contract admin.
+    /// If the NewAdminAddress is empty, the denom will have no admin.
+    ChangeAdmin {
+        denom: String,
+        new_admin_address: String,
+    },
+    /// Contracts can mint native tokens for an existing factory denom
+    /// that they are the admin of.
     MintTokens {
-        /// sub_denoms (nonces in Osmosis) are validated as part of the full denomination.
-        /// Can be up to 128 - prefix length (currently 7) - bech32 address length (4 (osmo) + 39) - number of separators (2) =
-        /// 76 "alphanumeric" (https://github.com/cosmos/cosmos-sdk/blob/2646b474c7beb0c93d4fafd395ef345f41afc251/types/coin.go#L677)
-        /// characters long.
-        /// Empty sub-denoms are valid. The token will then be prefix + contract address, i.e. "factory/<bech32 address>/"
-        sub_denom: String,
+        denom: String,
         amount: Uint128,
-        recipient: String,
+        mint_to_address: String,
+    },
+    /// Contracts can burn native tokens for an existing factory denom
+    /// that they are the admin of.
+    /// Currently, the burn from address must be the admin contract.
+    BurnTokens {
+        denom: String,
+        amount: Uint128,
+        burn_from_address: String,
     },
     // GAMM Module messages
     /// Swap over one or more pools
@@ -69,6 +87,14 @@ impl OsmosisMsg {
             first: Swap::new(pool_id, denom_in, denom_out),
             amount,
             route: vec![],
+        }
+    }
+
+    pub fn burn_contract_tokens(denom: String, amount: Uint128) -> Self {
+        OsmosisMsg::BurnTokens {
+            denom,
+            amount,
+            burn_from_address: "".to_string(),
         }
     }
 }

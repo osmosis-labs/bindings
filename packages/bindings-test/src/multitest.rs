@@ -191,12 +191,17 @@ pub struct OsmosisModule {}
 pub const BLOCK_TIME: u64 = 5;
 
 impl OsmosisModule {
-    fn build_denom(&self, contract: &Addr, sub_denom: &str) -> Result<String, ContractError> {
+    fn build_denom(&self, creator: &Addr, subdenom: &str) -> Result<String, ContractError> {
         // Minimum validation checks on the full denom.
         // https://github.com/cosmos/cosmos-sdk/blob/2646b474c7beb0c93d4fafd395ef345f41afc251/types/coin.go#L706-L711
         // https://github.com/cosmos/cosmos-sdk/blob/2646b474c7beb0c93d4fafd395ef345f41afc251/types/coin.go#L677
-        let full_denom = format!("factory/{}/{}", contract, sub_denom);
-        if full_denom.len() < 3 || full_denom.len() > 128 || contract.as_str().contains('/') {
+        let full_denom = format!("factory/{}/{}", creator, subdenom);
+        if full_denom.len() < 3
+            || full_denom.len() > 128
+            || creator.as_str().contains('/')
+            || subdenom.len() > 44
+            || creator.as_str().len() > 75
+        {
             return Err(ContractError::InvalidFullDenom { full_denom });
         }
         Ok(full_denom)
@@ -261,6 +266,7 @@ impl Module for OsmosisModule {
     type QueryT = OsmosisQuery;
     type SudoT = Empty;
 
+    // Builds a mock rust implementation of the expected osmosis functionality for testing
     fn execute<ExecC, QueryC>(
         &self,
         api: &dyn Api,
@@ -275,14 +281,24 @@ impl Module for OsmosisModule {
         QueryC: CustomQuery + DeserializeOwned + 'static,
     {
         match msg {
+            OsmosisMsg::CreateDenom { subdenom } => {
+                // TODO: Simulate denom creation, and add existence checks in MintTokens
+                let denom = self.build_denom(&sender, &subdenom)?;
+                let data = Some(to_binary(&FullDenomResponse { denom })?);
+                Ok(AppResponse {
+                    data,
+                    events: vec![],
+                })
+            }
             OsmosisMsg::MintTokens {
-                sub_denom,
+                denom,
                 amount,
-                recipient,
+                mint_to_address,
             } => {
-                let denom = self.build_denom(&sender, &sub_denom)?;
+                // TODO: This currently incorrectly simulates the Osmosis functionality, as it does not
+                // check admin functionality on the denom / that the denom was actually created
                 let mint = BankSudo::Mint {
-                    to_address: recipient,
+                    to_address: mint_to_address,
                     amount: coins(amount.u128(), &denom),
                 };
                 router.sudo(api, storage, block, mint.into())?;
@@ -293,6 +309,21 @@ impl Module for OsmosisModule {
                     events: vec![],
                 })
             }
+            OsmosisMsg::BurnTokens {
+                denom: _,
+                amount: _,
+                burn_from_address: _,
+            } => Ok(AppResponse {
+                data: None,
+                events: vec![],
+            }),
+            OsmosisMsg::ChangeAdmin {
+                denom: _denom,
+                new_admin_address: _new_admin_address,
+            } => Ok(AppResponse {
+                data: None,
+                events: vec![],
+            }),
             OsmosisMsg::Swap {
                 first,
                 route,
@@ -422,11 +453,11 @@ impl Module for OsmosisModule {
     ) -> anyhow::Result<Binary> {
         match request {
             OsmosisQuery::FullDenom {
-                contract,
-                sub_denom,
+                creator_addr,
+                subdenom,
             } => {
-                let contract = api.addr_validate(&contract)?;
-                let denom = self.build_denom(&contract, &sub_denom)?;
+                let contract = api.addr_validate(&creator_addr)?;
+                let denom = self.build_denom(&contract, &subdenom)?;
                 let res = FullDenomResponse { denom };
                 Ok(to_binary(&res)?)
             }
@@ -560,7 +591,7 @@ mod tests {
     fn mint_token() {
         let contract = Addr::unchecked("govner");
         let rcpt = Addr::unchecked("townies");
-        let sub_denom = "fundz";
+        let subdenom = "fundz";
 
         let mut app = OsmosisApp::new();
 
@@ -573,24 +604,25 @@ mod tests {
             .wrap()
             .query(
                 &OsmosisQuery::FullDenom {
-                    contract: contract.to_string(),
-                    sub_denom: sub_denom.to_string(),
+                    creator_addr: contract.to_string(),
+                    subdenom: subdenom.to_string(),
                 }
                 .into(),
             )
             .unwrap();
-        assert_ne!(denom, sub_denom);
+        assert_ne!(denom, subdenom);
         assert!(denom.len() > 10);
 
         // prepare to mint
         let amount = Uint128::new(1234567);
         let msg = OsmosisMsg::MintTokens {
-            sub_denom: sub_denom.to_string(),
+            denom: denom.to_string(),
             amount,
-            recipient: rcpt.to_string(),
+            mint_to_address: rcpt.to_string(),
         };
 
         // simulate contract calling
+        // TODO: How is this not erroring, the token isn't created
         app.execute(contract, msg.into()).unwrap();
 
         // we got tokens!
@@ -599,7 +631,7 @@ mod tests {
         assert_eq!(end, expected);
 
         // but no minting of unprefixed version
-        let empty = app.wrap().query_balance(rcpt.as_str(), sub_denom).unwrap();
+        let empty = app.wrap().query_balance(rcpt.as_str(), subdenom).unwrap();
         assert_eq!(empty.amount, Uint128::zero());
     }
 
