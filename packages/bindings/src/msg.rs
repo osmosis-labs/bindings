@@ -49,7 +49,7 @@ pub enum OsmosisMsg {
 }
 
 impl OsmosisMsg {
-    /// Basic helper to define a swap with one pool
+    /// Returns an initialized Swap message.
     pub fn simple_swap(
         pool_id: u64,
         denom_in: impl Into<String>,
@@ -63,6 +63,7 @@ impl OsmosisMsg {
         }
     }
 
+     // Returns an initialzied BurnTokens message
     pub fn burn_contract_tokens(denom: String, amount: Uint128, burn_from_address: String) -> Self {
         OsmosisMsg::BurnTokens {
             denom,

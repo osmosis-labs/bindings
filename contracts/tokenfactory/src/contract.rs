@@ -58,8 +58,14 @@ pub fn execute(
     }
 }
 
-pub fn create_denom(deps: DepsMut, denom: String) -> Result<Response<OsmosisMsg>, ContractError> {
-    Ok(Response::default())
+pub fn create_denom(deps: DepsMut, subdenom: String) -> Result<Response<OsmosisMsg>, ContractError> {
+    let create_denom_msg = OsmosisMsg::CreateDenom{subdenom};
+
+    let res = Response::new()
+    .add_attribute("method", "burn_tokens")
+    .add_message(<OsmosisMsg>::from(create_denom_msg));
+
+    Ok(res)
 }
 
 pub fn change_admin(
@@ -67,7 +73,13 @@ pub fn change_admin(
     denom: String,
     new_admin_address: String,
 ) -> Result<Response<OsmosisMsg>, ContractError> {
-    Ok(Response::default())
+    let change_admin_msg = OsmosisMsg::ChangeAdmin{denom, new_admin_address};
+
+    let res = Response::new()
+    .add_attribute("method", "burn_tokens")
+    .add_message(<OsmosisMsg>::from(change_admin_msg));
+
+    Ok(res)
 }
 
 pub fn mint_tokens(
@@ -76,7 +88,14 @@ pub fn mint_tokens(
     amount: Uint128,
     mint_to_address: String,
 ) -> Result<Response<OsmosisMsg>, ContractError> {
-    Ok(Response::default())
+
+    let mint_tokens_msg = OsmosisMsg::MintTokens{denom, amount, mint_to_address};
+
+    let res = Response::new()
+    .add_attribute("method", "burn_tokens")
+    .add_message(<OsmosisMsg>::from(mint_tokens_msg));
+
+    Ok(res)
 }
 
 pub fn burn_tokens(
@@ -85,13 +104,12 @@ pub fn burn_tokens(
     amount: Uint128,
     burn_from_address: String,
 ) -> Result<Response<OsmosisMsg>, ContractError> {
-    STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
-        Ok(state)
-    })?;
 
     let burn_token_msg = OsmosisMsg::burn_contract_tokens(denom, amount, burn_from_address);
 
-    let res = Response::new().add_attribute("method", "burn_tokens").add_message(<OsmosisMsg>::from(burn_token_msg));
+    let res = Response::new()
+        .add_attribute("method", "burn_tokens")
+        .add_message(<OsmosisMsg>::from(burn_token_msg));
 
     Ok(res)
 }
