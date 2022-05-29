@@ -1078,7 +1078,7 @@ mod tests {
         let Coin { amount, .. } = app.wrap().query_balance(&lp, pool_denom).unwrap();
         assert_eq!(amount, Uint128::new(800_000));
 
-        // this is too low a payment, will error
+        // no duration, will error
         // ToDo: Add more errors handling to the mock
         let msg = OsmosisMsg::LockTokens {
             denom: pool_denom.to_string(),
@@ -1091,12 +1091,19 @@ mod tests {
         // now a proper lock
         let msg = OsmosisMsg::LockTokens {
             denom: pool_denom.to_string(),
-            amount,
+            amount: amount - Uint128::new(100_000),
             duration: "3600".to_string(),
         };
         let _res = app.execute(lp.clone(), msg.into()).unwrap();
 
-        // update balances (800_000 - 501_505 paid = 298_495)
+        // update balances (700_000 locked + 100_000 left)
+        let Coin { amount, .. } = app.wrap().query_balance(&lp, pool_denom).unwrap();
+        assert_eq!(amount, Uint128::new(100_000));
+
+        // and using the helper
+        let msg = OsmosisMsg::lock(pool_denom, amount, 3600u128);
+        let _res = app.execute(lp.clone(), msg.into()).unwrap();
+
         let Coin { amount, .. } = app.wrap().query_balance(&lp, pool_denom).unwrap();
         assert_eq!(amount, Uint128::new(0));
 
