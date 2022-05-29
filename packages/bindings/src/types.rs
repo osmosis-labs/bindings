@@ -132,3 +132,9 @@ impl JoinAmount {
         }
     }
 }
+
+pub enum JoinType {
+    Full {},
+    SwapForExactShares {},
+    SwapForExactTokens {},
+}

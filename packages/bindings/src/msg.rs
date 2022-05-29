@@ -1,9 +1,9 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::types::{JoinAmount, SwapAmountWithLimit};
+use crate::types::{JoinAmount, JoinType, SwapAmountWithLimit};
 use crate::{Step, Swap};
-use cosmwasm_std::{CosmosMsg, CustomMsg, Uint128};
+use cosmwasm_std::{Coin, CosmosMsg, CustomMsg, Uint128};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -87,6 +87,37 @@ impl OsmosisMsg {
             first: Swap::new(pool_id, denom_in, denom_out),
             amount,
             route: vec![],
+        }
+    }
+
+    pub fn join_pool(
+        pool_id: impl Into<Uint128>,
+        tokens_in: Vec<Coin>,
+        shares_out: impl Into<Uint128>,
+        join_type: JoinType,
+    ) -> Self {
+        let amount = match join_type {
+            JoinType::Full {} => JoinAmount::new(tokens_in, shares_out.into()),
+            JoinType::SwapForExactShares {} => {
+                assert!(tokens_in.len() == 1);
+                JoinAmount::new_with_swap(tokens_in[0].clone(), shares_out.into(), false)
+            }
+            JoinType::SwapForExactTokens {} => {
+                assert!(tokens_in.len() == 1);
+                JoinAmount::new_with_swap(tokens_in[0].clone(), shares_out.into(), true)
+            }
+        };
+        OsmosisMsg::JoinPool {
+            pool_id: pool_id.into(),
+            amount: amount.into(),
+        }
+    }
+
+    pub fn lock(denom: &str, amount: impl Into<Uint128>, seconds: impl Into<Uint128>) -> Self {
+        OsmosisMsg::LockTokens {
+            denom: denom.to_string(),
+            amount: amount.into(),
+            duration: seconds.into().to_string(),
         }
     }
 
