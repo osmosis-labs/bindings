@@ -390,6 +390,10 @@ impl Module for OsmosisModule {
                     events: vec![],
                 })
             }
+            OsmosisMsg::JoinPool { .. } => todo!(),
+            OsmosisMsg::ExitPool { .. } => todo!(),
+            OsmosisMsg::BeginUnlocking { .. } => todo!(),
+            OsmosisMsg::BeginUnlockingAll {} => todo!(),
         }
     }
 
@@ -449,6 +453,7 @@ impl Module for OsmosisModule {
 
                 Ok(to_binary(&SwapResponse { amount })?)
             }
+            OsmosisQuery::LockedTokens { .. } => todo!(),
         }
     }
 }

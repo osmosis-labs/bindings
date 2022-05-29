@@ -78,3 +78,18 @@ impl SwapAmountWithLimit {
 pub struct LockTokensResponse {
     pub id: u64,
 }
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum JoinAmount {
+    ExactSharesForToken {
+        shares: Uint128,
+        max_token: Coin,
+        /// If this is set to true the provided token will be swapped to join the pool. Otherise it will
+        swap: bool,
+    },
+    ExactTokenForShares {
+        token: Coin,
+        min_shares: Uint128,
+    },
+}
