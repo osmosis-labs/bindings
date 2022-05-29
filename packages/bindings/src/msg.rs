@@ -1,7 +1,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::types::SwapAmountWithLimit;
+use crate::types::{JoinAmount, SwapAmountWithLimit};
 use crate::{Step, Swap};
 use cosmwasm_std::{CosmosMsg, CustomMsg, Uint128};
 
@@ -35,7 +35,7 @@ pub enum OsmosisMsg {
     },
     JoinPool {
         pool_id: Uint128,
-        amount: SwapAmountWithLimit,
+        amount: JoinAmount,
     },
     ExitPool {},
     // Lockup module messages
@@ -45,7 +45,7 @@ pub enum OsmosisMsg {
         denom: String,
         amount: Uint128,
         /// The duration in seconds
-        lock_duration: String,
+        duration: String,
     },
     /// Unbond locked gamm tokens
     BeginUnlocking {
@@ -60,18 +60,6 @@ pub enum OsmosisMsg {
 impl OsmosisMsg {
     /// Basic helper to define a swap with one pool
     pub fn simple_swap(
-        pool_id: u64,
-        denom_in: impl Into<String>,
-        denom_out: impl Into<String>,
-        amount: SwapAmountWithLimit,
-    ) -> Self {
-        OsmosisMsg::Swap {
-            first: Swap::new(pool_id, denom_in, denom_out),
-            amount,
-            route: vec![],
-        }
-    }
-    pub fn join_pool(
         pool_id: u64,
         denom_in: impl Into<String>,
         denom_out: impl Into<String>,

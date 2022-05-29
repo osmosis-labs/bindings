@@ -161,7 +161,7 @@ mod tests {
     };
     use cosmwasm_std::{
         coin, coins, from_binary, AllBalanceResponse, BankMsg, BankQuery, Binary, Coin, Event,
-        StakingMsg, StdError, SubMsgExecutionResponse,
+        StakingMsg, StdError, SubMsgResponse,
     };
     use cosmwasm_std::{OwnedDeps, SubMsgResult, SystemError};
     use std::marker::PhantomData;
@@ -424,7 +424,7 @@ mod tests {
         let id = 123u64;
         let data = Binary::from(b"foobar");
         let events = vec![Event::new("message").add_attribute("signer", "caller-addr")];
-        let result = SubMsgResult::Ok(SubMsgExecutionResponse {
+        let result = SubMsgResult::Ok(SubMsgResponse {
             events: events.clone(),
             data: Some(data.clone()),
         });
