@@ -6,7 +6,7 @@ use cosmwasm_std::{
 };
 use cw2::set_contract_version;
 
-use crate::error::ContractError;
+use crate::error::TokenFactoryError;
 use crate::msg::{ExecuteMsg, GetDenomResponse, InstantiateMsg, QueryMsg};
 use crate::state::{State, STATE};
 use osmo_bindings::{OsmosisMsg, OsmosisQuery, OsmosisQuerier };
@@ -21,7 +21,7 @@ pub fn instantiate(
     _env: Env,
     info: MessageInfo,
     _msg: InstantiateMsg,
-) -> Result<Response, ContractError> {
+) -> Result<Response, TokenFactoryError> {
     let state = State {
         owner: info.sender.clone(),
     };
@@ -39,7 +39,7 @@ pub fn execute(
     _env: Env,
     _info: MessageInfo,
     msg: ExecuteMsg,
-) -> Result<Response<OsmosisMsg>, ContractError> {
+) -> Result<Response<OsmosisMsg>, TokenFactoryError> {
     match msg {
         ExecuteMsg::CreateDenom { subdenom } => create_denom(deps, subdenom),
         ExecuteMsg::ChangeAdmin {
@@ -59,7 +59,13 @@ pub fn execute(
     }
 }
 
-pub fn create_denom(_deps: DepsMut<OsmosisQuery>, subdenom: String) -> Result<Response<OsmosisMsg>, ContractError> {
+pub fn create_denom(_deps: DepsMut<OsmosisQuery>, subdenom: String) -> Result<Response<OsmosisMsg>, TokenFactoryError> {
+    if subdenom.eq("") {
+        return Err(TokenFactoryError::InvalidSubdenom {
+            subdenom
+        });
+    }
+
     let create_denom_msg = OsmosisMsg::CreateDenom{subdenom};
 
     let res = Response::new()
@@ -73,7 +79,7 @@ pub fn change_admin(
     _deps: DepsMut<OsmosisQuery>,
     denom: String,
     new_admin_address: String,
-) -> Result<Response<OsmosisMsg>, ContractError> {
+) -> Result<Response<OsmosisMsg>, TokenFactoryError> {
     let change_admin_msg = OsmosisMsg::ChangeAdmin{denom, new_admin_address};
 
     let res = Response::new()
@@ -88,7 +94,7 @@ pub fn mint_tokens(
     denom: String,
     amount: Uint128,
     mint_to_address: String,
-) -> Result<Response<OsmosisMsg>, ContractError> {
+) -> Result<Response<OsmosisMsg>, TokenFactoryError> {
 
     let mint_tokens_msg = OsmosisMsg::MintTokens{denom, amount, mint_to_address};
 
@@ -104,7 +110,7 @@ pub fn burn_tokens(
     denom: String,
     amount: Uint128,
     burn_from_address: String,
-) -> Result<Response<OsmosisMsg>, ContractError> {
+) -> Result<Response<OsmosisMsg>, TokenFactoryError> {
 
     let burn_token_msg = OsmosisMsg::burn_contract_tokens(denom, amount, burn_from_address);
 
@@ -192,5 +198,21 @@ mod tests {
         let get_denom_response: GetDenomResponse = from_binary(&response).unwrap();
 
         assert_eq!(format!("factory/{}/{}", MOCK_CONTRACT_ADDR, DENOM_NAME), get_denom_response.denom);
+    }
+
+    #[test]
+    fn create_denom_invalid_subdenom() {
+        let mut deps = mock_dependencies(&[]);
+
+        let msg = InstantiateMsg { };
+        let info = mock_info("creator", &coins(1000, "uosmo"));
+        instantiate(deps.as_mut(), mock_env(), info.clone(), msg.clone()).unwrap();
+
+        let subdenom: String = String::from("");
+
+        let msg = ExecuteMsg::CreateDenom { subdenom };
+        let info = mock_info("creator", &coins(2, "token"));
+        let actual = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
+        assert_eq!(TokenFactoryError::InvalidSubdenom{subdenom: String::from("")}, actual);
     }
 }
