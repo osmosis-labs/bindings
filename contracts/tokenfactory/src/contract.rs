@@ -1,16 +1,15 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, to_vec, Binary, Deps, DepsMut, Env,
-    MessageInfo, Response, StdResult, Uint128, SystemResult,
-    StdError, ContractResult, QueryRequest, from_binary
+    to_binary, Binary, Deps, DepsMut, Env,
+    MessageInfo, Response, StdResult, Uint128,
 };
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, GetDenomResponse, InstantiateMsg, QueryMsg};
 use crate::state::{State, STATE};
-use osmo_bindings::{OsmosisMsg, OsmosisQuery };
+use osmo_bindings::{OsmosisMsg, OsmosisQuery, OsmosisQuerier };
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:tokenfactory-demo";
@@ -122,38 +121,94 @@ pub fn query(deps: Deps<OsmosisQuery>, _env: Env, msg: QueryMsg) -> StdResult<Bi
         QueryMsg::GetDenom {
             creator_address,
             subdenom,
-        } => to_binary(&get_denom(deps, creator_address, subdenom)?),
+        } => to_binary(&get_denom(deps, creator_address, subdenom)),
     }
 }
 
-fn get_denom(deps: Deps<OsmosisQuery>, creator_addr: String, subdenom: String) -> StdResult<GetDenomResponse> {
-    let full_denom_query = OsmosisQuery::FullDenom{creator_addr, subdenom};
+fn get_denom(deps: Deps<OsmosisQuery>, creator_addr: String, subdenom: String) -> GetDenomResponse {
+    let querier = OsmosisQuerier::new(&deps.querier);
+    let response = querier.full_denom(creator_addr, subdenom).unwrap();
 
-    let request: QueryRequest<OsmosisQuery> = OsmosisQuery::into(full_denom_query);
-
-    let raw = to_vec(&request).map_err(|serialize_err| {
-        StdError::generic_err(format!("Serializing QueryRequest: {}", serialize_err))
-    })?;
-
-    match deps.querier.raw_query(&raw) {
-        SystemResult::Err(system_err) => Err(StdError::generic_err(format!(
-            "Querier system error: {}",
-            system_err
-        ))),
-        SystemResult::Ok(ContractResult::Err(contract_err)) => Err(StdError::generic_err(format!(
-            "Querier contract error: {}",
-            contract_err
-        ))),
-        SystemResult::Ok(ContractResult::Ok(value)) => Ok(from_binary(&value).unwrap()),
-    }
+    let get_denom_response = GetDenomResponse{ denom: response.denom };
+    get_denom_response
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use cosmwasm_std::testing::{mock_env, mock_info, MockApi, MockQuerier, MockStorage, MOCK_CONTRACT_ADDR,};
-    use cosmwasm_std::{coins, from_binary, Coin, OwnedDeps, SystemError};
+    use cosmwasm_std::{
+        coins, from_binary, Coin, OwnedDeps, SystemError, SystemResult, Addr, QueryRequest, from_slice,
+        Empty, QuerierResult, WasmQuery, ContractResult
+    };
+    use osmo_bindings::{OsmosisMsg, OsmosisQuery, OsmosisQuerier };
     use std::marker::PhantomData;
+
+    struct MockOsmosisQuerier {
+        contract: String,
+        storage: MockStorage,
+    }
+
+    impl MockOsmosisQuerier {
+        pub fn new(contract: &Addr, members: &[(&Addr, u64)]) -> Self {
+            let mut storage = MockStorage::new();
+            MockOsmosisQuerier {
+                contract: contract.to_string(),
+                storage,
+            }
+        }
+
+        fn handle_query(&self, request: QueryRequest<Empty>) -> QuerierResult {
+            match request {
+                QueryRequest::Wasm(WasmQuery::Raw { contract_addr, key }) => {
+                    self.query_wasm(contract_addr, key)
+                }
+                QueryRequest::Wasm(WasmQuery::Smart { msg, .. }) => self.query_wasm_smart(msg),
+                _ => SystemResult::Err(SystemError::UnsupportedRequest {
+                    kind: "not wasm".to_string(),
+                }),
+            }
+        }
+
+        // TODO: we should be able to add a custom wasm handler to MockQuerier from cosmwasm_std::mock
+        fn query_wasm(&self, contract_addr: String, key: Binary) -> QuerierResult {
+            if contract_addr != self.contract {
+                SystemResult::Err(SystemError::NoSuchContract {
+                    addr: contract_addr,
+                })
+            } else {
+                let bin = self.storage.get(&key).unwrap_or_default();
+                SystemResult::Ok(ContractResult::Ok(bin.into()))
+            }
+        }
+
+        fn query_wasm_smart(&self, msg: Binary) -> QuerierResult {
+            match from_binary(&msg) {
+                Ok(Tg4QueryMsg::ListMembers { .. }) => {
+                    let mlr = MemberListResponse { members: vec![] };
+                    SystemResult::Ok(ContractResult::Ok(to_binary(&mlr).unwrap()))
+                }
+                _ => SystemResult::Err(SystemError::UnsupportedRequest {
+                    kind: "Not ListMembers query".to_string(),
+                }),
+            }
+        }
+    }
+
+    impl Querier for OsmosisQuerier {
+        fn raw_query(&self, bin_request: &[u8]) -> QuerierResult {
+            let request: QueryRequest<Empty> = match from_slice(bin_request) {
+                Ok(v) => v,
+                Err(e) => {
+                    return SystemResult::Err(SystemError::InvalidRequest {
+                        error: format!("Parsing query request: {}", e),
+                        request: bin_request.into(),
+                    })
+                }
+            };
+            self.handle_query(request)
+        }
+    }
 
     pub fn mock_dependencies(
         contract_balance: &[Coin],
@@ -178,7 +233,7 @@ mod tests {
         let mut deps = mock_dependencies(&[]);
 
         let msg = InstantiateMsg { };
-        let info = mock_info("creator", &coins(1000, "earth"));
+        let info = mock_info("creator", &coins(1000, "uosmo"));
 
         // we can just call .unwrap() to assert this was a success
         let res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
@@ -188,6 +243,10 @@ mod tests {
     #[test]
     fn create_denom() {
         let mut deps = mock_dependencies(&[]);
+
+        let msg = InstantiateMsg { };
+        let info = mock_info("creator", &coins(1000, "uosmo"));
+        instantiate(deps.as_mut(), mock_env(), info.clone(), msg.clone()).unwrap();
 
         const DENOM_NAME: &str = "mydenom";
 
