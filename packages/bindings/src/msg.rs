@@ -49,7 +49,7 @@ pub enum OsmosisMsg {
 }
 
 impl OsmosisMsg {
-    /// Returns an initialized Swap message.
+    /// Basic helper to define a swap with one pool
     pub fn simple_swap(
         pool_id: u64,
         denom_in: impl Into<String>,
@@ -63,21 +63,13 @@ impl OsmosisMsg {
         }
     }
 
-     // Returns an initialzied BurnTokens message
     pub fn burn_contract_tokens(denom: String, amount: Uint128, _burn_from_address: String) -> Self {
         OsmosisMsg::BurnTokens {
             denom,
             amount,
-            burn_from_address: String::from(""),
+            burn_from_address: "".to_string(), // burn_from_address is currently disabled.
         }
     }
-}
-
-// This is just a helper to properly serialize the above message
-#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
-#[serde(rename_all = "snake_case")]
-enum ReceiverExecuteMsg {
-    Receive(OsmosisMsg),
 }
 
 impl From<OsmosisMsg> for CosmosMsg<OsmosisMsg> {
