@@ -136,90 +136,18 @@ fn get_denom(deps: Deps<OsmosisQuery>, creator_addr: String, subdenom: String) -
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cosmwasm_std::testing::{mock_env, mock_info, MockApi, MockQuerier, MockStorage, MOCK_CONTRACT_ADDR,};
+    use cosmwasm_std::testing::{mock_env, mock_info, MockApi, MockStorage, MOCK_CONTRACT_ADDR,};
     use cosmwasm_std::{
-        coins, from_binary, Coin, OwnedDeps, SystemError, SystemResult, Addr, QueryRequest, from_slice,
-        Empty, QuerierResult, WasmQuery, ContractResult
+        coins, Coin, OwnedDeps, from_binary
     };
-    use osmo_bindings::{OsmosisMsg, OsmosisQuery, OsmosisQuerier };
+    use osmo_bindings::{ OsmosisQuery };
+    use osmo_bindings_test::{ OsmosisApp };
     use std::marker::PhantomData;
-
-    struct MockOsmosisQuerier {
-        contract: String,
-        storage: MockStorage,
-    }
-
-    impl MockOsmosisQuerier {
-        pub fn new(contract: &Addr, members: &[(&Addr, u64)]) -> Self {
-            let mut storage = MockStorage::new();
-            MockOsmosisQuerier {
-                contract: contract.to_string(),
-                storage,
-            }
-        }
-
-        fn handle_query(&self, request: QueryRequest<Empty>) -> QuerierResult {
-            match request {
-                QueryRequest::Wasm(WasmQuery::Raw { contract_addr, key }) => {
-                    self.query_wasm(contract_addr, key)
-                }
-                QueryRequest::Wasm(WasmQuery::Smart { msg, .. }) => self.query_wasm_smart(msg),
-                _ => SystemResult::Err(SystemError::UnsupportedRequest {
-                    kind: "not wasm".to_string(),
-                }),
-            }
-        }
-
-        // TODO: we should be able to add a custom wasm handler to MockQuerier from cosmwasm_std::mock
-        fn query_wasm(&self, contract_addr: String, key: Binary) -> QuerierResult {
-            if contract_addr != self.contract {
-                SystemResult::Err(SystemError::NoSuchContract {
-                    addr: contract_addr,
-                })
-            } else {
-                let bin = self.storage.get(&key).unwrap_or_default();
-                SystemResult::Ok(ContractResult::Ok(bin.into()))
-            }
-        }
-
-        fn query_wasm_smart(&self, msg: Binary) -> QuerierResult {
-            match from_binary(&msg) {
-                Ok(Tg4QueryMsg::ListMembers { .. }) => {
-                    let mlr = MemberListResponse { members: vec![] };
-                    SystemResult::Ok(ContractResult::Ok(to_binary(&mlr).unwrap()))
-                }
-                _ => SystemResult::Err(SystemError::UnsupportedRequest {
-                    kind: "Not ListMembers query".to_string(),
-                }),
-            }
-        }
-    }
-
-    impl Querier for OsmosisQuerier {
-        fn raw_query(&self, bin_request: &[u8]) -> QuerierResult {
-            let request: QueryRequest<Empty> = match from_slice(bin_request) {
-                Ok(v) => v,
-                Err(e) => {
-                    return SystemResult::Err(SystemError::InvalidRequest {
-                        error: format!("Parsing query request: {}", e),
-                        request: bin_request.into(),
-                    })
-                }
-            };
-            self.handle_query(request)
-        }
-    }
 
     pub fn mock_dependencies(
         contract_balance: &[Coin],
-    ) -> OwnedDeps<MockStorage, MockApi, MockQuerier<OsmosisQuery>, OsmosisQuery> {
-        let custom_querier: MockQuerier<OsmosisQuery> =
-            MockQuerier::new(&[(MOCK_CONTRACT_ADDR, contract_balance)]).with_custom_handler(|_| {
-                SystemResult::Err(SystemError::InvalidRequest {
-                    error: "not implemented".to_string(),
-                    request: Default::default(),
-                })
-            });
+    ) -> OwnedDeps<MockStorage, MockApi, OsmosisApp, OsmosisQuery> {
+        let custom_querier = OsmosisApp::new();
         OwnedDeps {
             storage: MockStorage::default(),
             api: MockApi::default(),
@@ -241,7 +169,7 @@ mod tests {
     }
 
     #[test]
-    fn create_denom() {
+    fn create_denom_get_denom() {
         let mut deps = mock_dependencies(&[]);
 
         let msg = InstantiateMsg { };
@@ -258,10 +186,11 @@ mod tests {
 
         let get_denom_query = QueryMsg::GetDenom{ creator_address: String::from(MOCK_CONTRACT_ADDR), subdenom: String::from(DENOM_NAME)};
 
+
         let response = query(deps.as_ref(), mock_env(), get_denom_query).unwrap();
 
         let get_denom_response: GetDenomResponse = from_binary(&response).unwrap();
 
-        assert_eq!(DENOM_NAME, get_denom_response.denom);
+        assert_eq!(format!("factory/{}/{}", MOCK_CONTRACT_ADDR, DENOM_NAME), get_denom_response.denom);
     }
 }

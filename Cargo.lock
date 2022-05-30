@@ -723,6 +723,7 @@ dependencies = [
  "cw-storage-plus",
  "cw2",
  "osmo-bindings",
+ "osmo-bindings-test",
  "schemars",
  "serde",
  "thiserror",
