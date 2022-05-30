@@ -41,7 +41,7 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response<OsmosisMsg>, TokenFactoryError> {
     match msg {
-        ExecuteMsg::CreateDenom { subdenom } => create_denom(deps, subdenom),
+        ExecuteMsg::CreateDenom { subdenom } => create_denom(subdenom),
         ExecuteMsg::ChangeAdmin {
             denom,
             new_admin_address,
@@ -59,7 +59,7 @@ pub fn execute(
     }
 }
 
-pub fn create_denom(_deps: DepsMut<OsmosisQuery>, subdenom: String) -> Result<Response<OsmosisMsg>, TokenFactoryError> {
+pub fn create_denom(subdenom: String) -> Result<Response<OsmosisMsg>, TokenFactoryError> {
     if subdenom.eq("") {
         return Err(TokenFactoryError::InvalidSubdenom {
             subdenom
@@ -69,7 +69,7 @@ pub fn create_denom(_deps: DepsMut<OsmosisQuery>, subdenom: String) -> Result<Re
     let create_denom_msg = OsmosisMsg::CreateDenom{subdenom};
 
     let res = Response::new()
-    .add_attribute("method", "burn_tokens")
+    .add_attribute("method", "create_denom")
     .add_message(<OsmosisMsg>::from(create_denom_msg));
 
     Ok(res)
@@ -92,27 +92,29 @@ pub fn change_admin(
 }
 
 pub fn mint_tokens(
-    _deps: DepsMut<OsmosisQuery>,
+    deps: DepsMut<OsmosisQuery>,
     denom: String,
     amount: Uint128,
     mint_to_address: String,
 ) -> Result<Response<OsmosisMsg>, TokenFactoryError> {
+    deps.api.addr_validate(&mint_to_address)?;
 
     let mint_tokens_msg = OsmosisMsg::MintTokens{denom, amount, mint_to_address};
 
     let res = Response::new()
-    .add_attribute("method", "burn_tokens")
+    .add_attribute("method", "mint_tokens")
     .add_message(<OsmosisMsg>::from(mint_tokens_msg));
 
     Ok(res)
 }
 
 pub fn burn_tokens(
-    _deps: DepsMut<OsmosisQuery>,
+    deps: DepsMut<OsmosisQuery>,
     denom: String,
     amount: Uint128,
     burn_from_address: String,
 ) -> Result<Response<OsmosisMsg>, TokenFactoryError> {
+    deps.api.addr_validate(&burn_from_address)?;
 
     let burn_token_msg = OsmosisMsg::burn_contract_tokens(denom, amount, burn_from_address);
 
@@ -146,7 +148,7 @@ mod tests {
     use super::*;
     use cosmwasm_std::testing::{mock_env, mock_info, MockApi, MockStorage, MOCK_CONTRACT_ADDR,};
     use cosmwasm_std::{
-        coins, Coin, OwnedDeps, from_binary, CosmosMsg, SubMsg
+        coins, Coin, OwnedDeps, from_binary, CosmosMsg, Attribute
     };
     use osmo_bindings::{ OsmosisQuery };
     use osmo_bindings_test::{ OsmosisApp };
@@ -203,6 +205,14 @@ mod tests {
         let expected_message = CosmosMsg::from(OsmosisMsg::CreateDenom{ subdenom: String::from(DENOM_NAME) });
         let actual_message = res.messages.get(0).unwrap();
         assert_eq!(expected_message, actual_message.msg);
+
+        assert_eq!(1, res.attributes.len());
+
+        let expected_attribute = Attribute::new("method", "create_denom");
+        let actual_attribute = res.attributes.get(0).unwrap();
+        assert_eq!(expected_attribute, actual_attribute);
+
+        assert_eq!(res.data.ok_or(0), Err(0));
     }
 
     #[test]
