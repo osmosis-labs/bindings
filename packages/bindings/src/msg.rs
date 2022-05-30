@@ -64,11 +64,11 @@ impl OsmosisMsg {
     }
 
      // Returns an initialzied BurnTokens message
-    pub fn burn_contract_tokens(denom: String, amount: Uint128, burn_from_address: String) -> Self {
+    pub fn burn_contract_tokens(denom: String, amount: Uint128, _burn_from_address: String) -> Self {
         OsmosisMsg::BurnTokens {
             denom,
             amount,
-            burn_from_address,
+            burn_from_address: String::from(""),
         }
     }
 }

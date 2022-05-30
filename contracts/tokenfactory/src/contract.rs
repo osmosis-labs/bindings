@@ -18,7 +18,7 @@ const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
-    deps: DepsMut,
+    deps: DepsMut<OsmosisQuery>,
     _env: Env,
     info: MessageInfo,
     _msg: InstantiateMsg,
@@ -36,7 +36,7 @@ pub fn instantiate(
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
-    deps: DepsMut,
+    deps: DepsMut<OsmosisQuery>,
     _env: Env,
     _info: MessageInfo,
     msg: ExecuteMsg,
@@ -60,7 +60,7 @@ pub fn execute(
     }
 }
 
-pub fn create_denom(_deps: DepsMut, subdenom: String) -> Result<Response<OsmosisMsg>, ContractError> {
+pub fn create_denom(_deps: DepsMut<OsmosisQuery>, subdenom: String) -> Result<Response<OsmosisMsg>, ContractError> {
     let create_denom_msg = OsmosisMsg::CreateDenom{subdenom};
 
     let res = Response::new()
@@ -71,7 +71,7 @@ pub fn create_denom(_deps: DepsMut, subdenom: String) -> Result<Response<Osmosis
 }
 
 pub fn change_admin(
-    _deps: DepsMut,
+    _deps: DepsMut<OsmosisQuery>,
     denom: String,
     new_admin_address: String,
 ) -> Result<Response<OsmosisMsg>, ContractError> {
@@ -85,7 +85,7 @@ pub fn change_admin(
 }
 
 pub fn mint_tokens(
-    _deps: DepsMut,
+    _deps: DepsMut<OsmosisQuery>,
     denom: String,
     amount: Uint128,
     mint_to_address: String,
@@ -101,7 +101,7 @@ pub fn mint_tokens(
 }
 
 pub fn burn_tokens(
-    _deps: DepsMut,
+    _deps: DepsMut<OsmosisQuery>,
     denom: String,
     amount: Uint128,
     burn_from_address: String,
@@ -117,7 +117,7 @@ pub fn burn_tokens(
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
+pub fn query(deps: Deps<OsmosisQuery>, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::GetDenom {
             creator_address,
@@ -126,7 +126,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     }
 }
 
-fn get_denom(deps: Deps, creator_addr: String, subdenom: String) -> StdResult<GetDenomResponse> {
+fn get_denom(deps: Deps<OsmosisQuery>, creator_addr: String, subdenom: String) -> StdResult<GetDenomResponse> {
     let full_denom_query = OsmosisQuery::FullDenom{creator_addr, subdenom};
 
     let request: QueryRequest<OsmosisQuery> = OsmosisQuery::into(full_denom_query);
@@ -151,45 +151,58 @@ fn get_denom(deps: Deps, creator_addr: String, subdenom: String) -> StdResult<Ge
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cosmwasm_std::testing::{mock_dependencies_with_balance, mock_env, mock_info};
-    use cosmwasm_std::{coins};
+    use cosmwasm_std::testing::{mock_env, mock_info, MockApi, MockQuerier, MockStorage, MOCK_CONTRACT_ADDR,};
+    use cosmwasm_std::{coins, from_binary, Coin, OwnedDeps, SystemError};
+    use std::marker::PhantomData;
 
-    // #[test]
-    // fn proper_initialization() {
-    //     let mut deps = mock_dependencies_with_balance(&coins(2, "token"));
+    pub fn mock_dependencies(
+        contract_balance: &[Coin],
+    ) -> OwnedDeps<MockStorage, MockApi, MockQuerier<OsmosisQuery>, OsmosisQuery> {
+        let custom_querier: MockQuerier<OsmosisQuery> =
+            MockQuerier::new(&[(MOCK_CONTRACT_ADDR, contract_balance)]).with_custom_handler(|_| {
+                SystemResult::Err(SystemError::InvalidRequest {
+                    error: "not implemented".to_string(),
+                    request: Default::default(),
+                })
+            });
+        OwnedDeps {
+            storage: MockStorage::default(),
+            api: MockApi::default(),
+            querier: custom_querier,
+            custom_query_type: PhantomData,
+        }
+    }
 
-    //     let msg = InstantiateMsg { count: 17 };
-    //     let info = mock_info("creator", &coins(1000, "earth"));
+    #[test]
+    fn proper_initialization() {
+        let mut deps = mock_dependencies(&[]);
 
-    //     // we can just call .unwrap() to assert this was a success
-    //     let res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
-    //     assert_eq!(0, res.messages.len());
+        let msg = InstantiateMsg { };
+        let info = mock_info("creator", &coins(1000, "earth"));
 
-    //     // it worked, let's query the state
-    //     let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
-    //     let value: CountResponse = from_binary(&res).unwrap();
-    //     assert_eq!(17, value.count);
-    // }
+        // we can just call .unwrap() to assert this was a success
+        let res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
+        assert_eq!(0, res.messages.len());
+    }
 
     #[test]
     fn create_denom() {
-        let mut deps = mock_dependencies_with_balance(&coins(2, "token"));
+        let mut deps = mock_dependencies(&[]);
 
-        let msg = InstantiateMsg {};
+        const DENOM_NAME: &str = "mydenom";
+
+        let subdenom: String = String::from(DENOM_NAME);
+
+        let msg = ExecuteMsg::CreateDenom { subdenom };
         let info = mock_info("creator", &coins(2, "token"));
-        let _res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
+        let _res = execute(deps.as_mut(), mock_env(), info, msg);
 
-        // beneficiary can release it
-        let info = mock_info("anyone", &coins(2, "token"));
+        let get_denom_query = QueryMsg::GetDenom{ creator_address: String::from(MOCK_CONTRACT_ADDR), subdenom: String::from(DENOM_NAME)};
 
-        let denom_name_to_create = String::from("mycustomdenom");
+        let response = query(deps.as_ref(), mock_env(), get_denom_query).unwrap();
 
-        let msg = ExecuteMsg::CreateDenom { subdenom: denom_name_to_create };
-        let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
+        let get_denom_response: GetDenomResponse = from_binary(&response).unwrap();
 
-        // // should increase counter by 1
-        // let res = query(deps.as_ref(), mock_env(), QueryMsg::Get {}).unwrap();
-        // let value: CountResponse = from_binary(&res).unwrap();
-        // assert_eq!(18, value.count);
+        assert_eq!(DENOM_NAME, get_denom_response.denom);
     }
 }
