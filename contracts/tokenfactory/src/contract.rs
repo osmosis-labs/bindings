@@ -1,7 +1,9 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Uint128, SubMsg
+    to_binary, to_vec, Binary, Deps, DepsMut, Env,
+    MessageInfo, Response, StdResult, Uint128, SystemResult,
+    StdError, ContractResult, QueryRequest, from_binary
 };
 use cw2::set_contract_version;
 
@@ -19,7 +21,7 @@ pub fn instantiate(
     deps: DepsMut,
     _env: Env,
     info: MessageInfo,
-    msg: InstantiateMsg,
+    _msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     let state = State {
         owner: info.sender.clone(),
@@ -36,7 +38,7 @@ pub fn instantiate(
 pub fn execute(
     deps: DepsMut,
     _env: Env,
-    info: MessageInfo,
+    _info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response<OsmosisMsg>, ContractError> {
     match msg {
@@ -58,7 +60,7 @@ pub fn execute(
     }
 }
 
-pub fn create_denom(deps: DepsMut, subdenom: String) -> Result<Response<OsmosisMsg>, ContractError> {
+pub fn create_denom(_deps: DepsMut, subdenom: String) -> Result<Response<OsmosisMsg>, ContractError> {
     let create_denom_msg = OsmosisMsg::CreateDenom{subdenom};
 
     let res = Response::new()
@@ -69,7 +71,7 @@ pub fn create_denom(deps: DepsMut, subdenom: String) -> Result<Response<OsmosisM
 }
 
 pub fn change_admin(
-    deps: DepsMut,
+    _deps: DepsMut,
     denom: String,
     new_admin_address: String,
 ) -> Result<Response<OsmosisMsg>, ContractError> {
@@ -83,7 +85,7 @@ pub fn change_admin(
 }
 
 pub fn mint_tokens(
-    deps: DepsMut,
+    _deps: DepsMut,
     denom: String,
     amount: Uint128,
     mint_to_address: String,
@@ -99,7 +101,7 @@ pub fn mint_tokens(
 }
 
 pub fn burn_tokens(
-    deps: DepsMut,
+    _deps: DepsMut,
     denom: String,
     amount: Uint128,
     burn_from_address: String,
@@ -124,19 +126,33 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     }
 }
 
-fn get_denom(deps: Deps, creator_address: String, subdenom: String) -> StdResult<GetDenomResponse> {
-    Ok(GetDenomResponse {
-        full_denom: String::from("mycustomdenom"),
-        owner: String::from("mycustomdenom"),
-        short_name: String::from("mycustomdenom"),
-    })
+fn get_denom(deps: Deps, creator_addr: String, subdenom: String) -> StdResult<GetDenomResponse> {
+    let full_denom_query = OsmosisQuery::FullDenom{creator_addr, subdenom};
+
+    let request: QueryRequest<OsmosisQuery> = OsmosisQuery::into(full_denom_query);
+
+    let raw = to_vec(&request).map_err(|serialize_err| {
+        StdError::generic_err(format!("Serializing QueryRequest: {}", serialize_err))
+    })?;
+
+    match deps.querier.raw_query(&raw) {
+        SystemResult::Err(system_err) => Err(StdError::generic_err(format!(
+            "Querier system error: {}",
+            system_err
+        ))),
+        SystemResult::Ok(ContractResult::Err(contract_err)) => Err(StdError::generic_err(format!(
+            "Querier contract error: {}",
+            contract_err
+        ))),
+        SystemResult::Ok(ContractResult::Ok(value)) => Ok(from_binary(&value).unwrap()),
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use cosmwasm_std::testing::{mock_dependencies_with_balance, mock_env, mock_info};
-    use cosmwasm_std::{coins, from_binary};
+    use cosmwasm_std::{coins};
 
     // #[test]
     // fn proper_initialization() {
