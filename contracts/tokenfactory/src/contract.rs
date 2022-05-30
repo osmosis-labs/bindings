@@ -154,6 +154,8 @@ mod tests {
     use osmo_bindings_test::{ OsmosisApp };
     use std::marker::PhantomData;
 
+    const DENOM_NAME: &str = "mydenom";
+
     pub fn mock_dependencies(
         contract_balance: &[Coin],
     ) -> OwnedDeps<MockStorage, MockApi, OsmosisApp, OsmosisQuery> {
@@ -181,7 +183,6 @@ mod tests {
     #[test]
     fn query_get_denom() {
         let deps = mock_dependencies(&[]);
-        const DENOM_NAME: &str = "mydenom";
         let get_denom_query = QueryMsg::GetDenom{ creator_address: String::from(MOCK_CONTRACT_ADDR), subdenom: String::from(DENOM_NAME)};
         let response = query(deps.as_ref(), mock_env(), get_denom_query).unwrap();
         let get_denom_response: GetDenomResponse = from_binary(&response).unwrap();
@@ -191,8 +192,6 @@ mod tests {
     #[test]
     fn msg_create_denom_success() {
         let mut deps = mock_dependencies(&[]);
-
-        const DENOM_NAME: &str = "mydenom";
 
         let subdenom: String = String::from(DENOM_NAME);
 
@@ -228,36 +227,28 @@ mod tests {
     }
 
     #[test]
-    fn msg_change_admin() {
+    fn msg_change_admin_success() {
         let mut deps = mock_dependencies(&[]);
-
-        let msg = InstantiateMsg { };
-        let info = mock_info("creator", &coins(1000, "uosmo"));
-        instantiate(deps.as_mut(), mock_env(), info.clone(), msg.clone()).unwrap();
-
-        const DENOM_NAME: &str = "mydenom";
-
-        let subdenom: String = String::from(DENOM_NAME);
-
-        let msg = ExecuteMsg::CreateDenom { subdenom };
-        let mut info = mock_info("creator", &coins(2, "token"));
-        let _res = execute(deps.as_mut(), mock_env(), info, msg);
-
-        let get_denom_query = QueryMsg::GetDenom{ creator_address: String::from(MOCK_CONTRACT_ADDR), subdenom: String::from(DENOM_NAME)};
-        let response = query(deps.as_ref(), mock_env(), get_denom_query).unwrap();
-        let get_denom_response: GetDenomResponse = from_binary(&response).unwrap();
-
-        assert_eq!(format!("factory/{}/{}", MOCK_CONTRACT_ADDR, DENOM_NAME), get_denom_response.denom);
 
         const NEW_ADMIN_ADDR: &str = "newadmin";
 
-        let new_admin = String::from(NEW_ADMIN_ADDR);
-        info = mock_info("creator", &coins(2, "token"));
+        let info = mock_info("creator", &coins(2, "token"));
 
-        let msg = ExecuteMsg::ChangeAdmin { denom: String::from(DENOM_NAME), new_admin_address: new_admin };
-        let res = execute(deps.as_mut(), mock_env(), info, msg);
+        let msg = ExecuteMsg::ChangeAdmin { denom: String::from(DENOM_NAME), new_admin_address: String::from(NEW_ADMIN_ADDR) };
+        let res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
 
-        // https://github.com/osmosis-labs/osmosis/issues/1603
-        // Verify that admin was changed correctly once the Admin query is implemented
+        assert_eq!(1, res.messages.len());
+
+        let expected_message = CosmosMsg::from(OsmosisMsg::ChangeAdmin{ denom: String::from(DENOM_NAME), new_admin_address: String::from(NEW_ADMIN_ADDR) });
+        let actual_message = res.messages.get(0).unwrap();
+        assert_eq!(expected_message, actual_message.msg);
+
+        assert_eq!(1, res.attributes.len());
+
+        let expected_attribute = Attribute::new("method", "change_admin");
+        let actual_attribute = res.attributes.get(0).unwrap();
+        assert_eq!(expected_attribute, actual_attribute);
+
+        assert_eq!(res.data.ok_or(0), Err(0));
     }
 }
