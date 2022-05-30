@@ -148,7 +148,7 @@ mod tests {
     use super::*;
     use cosmwasm_std::testing::{mock_env, mock_info, MockApi, MockStorage, MOCK_CONTRACT_ADDR,};
     use cosmwasm_std::{
-        coins, Coin, OwnedDeps, from_binary, CosmosMsg, Attribute
+        coins, Coin, OwnedDeps, from_binary, CosmosMsg, Attribute, StdError
     };
     use osmo_bindings::{ OsmosisQuery };
     use osmo_bindings_test::{ OsmosisApp };
@@ -222,8 +222,8 @@ mod tests {
 
         let msg = ExecuteMsg::CreateDenom { subdenom };
         let info = mock_info("creator", &coins(2, "token"));
-        let actual = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
-        assert_eq!(TokenFactoryError::InvalidSubdenom{subdenom: String::from("")}, actual);
+        let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
+        assert_eq!(TokenFactoryError::InvalidSubdenom{subdenom: String::from("")}, err);
     }
 
     #[test]
@@ -250,5 +250,23 @@ mod tests {
         assert_eq!(expected_attribute, actual_attribute);
 
         assert_eq!(res.data.ok_or(0), Err(0));
+    }
+
+    #[test]
+    fn msg_change_admin_invalid_address() {
+        let mut deps = mock_dependencies(&[]);
+
+        const EMPTY_ADDR: &str = "";
+
+        let info = mock_info("creator", &coins(2, "token"));
+
+        let msg = ExecuteMsg::ChangeAdmin { denom: String::from(DENOM_NAME), new_admin_address: String::from(EMPTY_ADDR) };
+        let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
+        match err {
+            TokenFactoryError::Std(StdError::GenericErr { msg, .. }) => {
+                assert!(msg.contains("human address too short"))
+            }
+            e => panic!("Unexpected error: {:?}", e),
+        }
     }
 }
