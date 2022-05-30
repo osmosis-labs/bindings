@@ -9,7 +9,7 @@ pub struct OsmosisQuerier<'a> {
 
 impl<'a> OsmosisQuerier<'a> {
     pub fn new(querier: &'a QuerierWrapper<OsmosisQuery>) -> Self {
-        OsmosisQuerier { querier: querier }
+        OsmosisQuerier { querier }
     }
 
     pub fn full_denom(&self, creator_addr: String, subdenom: String) -> StdResult<FullDenomResponse> {
