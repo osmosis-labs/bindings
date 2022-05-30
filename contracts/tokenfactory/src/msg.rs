@@ -24,7 +24,7 @@ pub enum ExecuteMsg {
     BurnTokens {
         denom: String,
         amount: Uint128,
-        mint_to_address: String,
+        burn_from_address: String,
     },
 }
 
