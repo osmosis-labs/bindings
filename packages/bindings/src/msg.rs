@@ -63,11 +63,7 @@ impl OsmosisMsg {
         }
     }
 
-    pub fn mint_contract_tokens(
-        denom: String,
-        amount: Uint128,
-        mint_to_address: String,
-    ) -> Self {
+    pub fn mint_contract_tokens(denom: String, amount: Uint128, mint_to_address: String) -> Self {
         OsmosisMsg::MintTokens {
             denom,
             amount,
