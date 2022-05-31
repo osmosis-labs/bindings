@@ -492,7 +492,7 @@ mod tests {
         match err {
             TokenFactoryError::InvalidDenom { denom, message } => {
                 assert_eq!(String::from(full_denom_name), denom);
-                assert_eq!(message.contains("invalid subdenom")
+                assert_eq!(message.contains("invalid subdenom"));
             }
             err => panic!("Unexpected error: {:?}", err),
         }
