@@ -9,6 +9,9 @@ pub enum TokenFactoryError {
     #[error("Unauthorized")]
     Unauthorized {},
 
-    #[error("Invalid Subdenom: {subdenom:?}")]
+    #[error("Invalid subdenom: {subdenom:?}")]
     InvalidSubdenom { subdenom: String },
+
+    #[error("Invalid denom: {denom:?} {message:?}")]
+    InvalidDenom { denom: String, message: String },
 }
