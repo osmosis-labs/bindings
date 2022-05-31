@@ -67,7 +67,7 @@ pub fn create_denom(subdenom: String) -> Result<Response<OsmosisMsg>, TokenFacto
 
     let res = Response::new()
         .add_attribute("method", "create_denom")
-        .add_message(<OsmosisMsg>::from(create_denom_msg));
+        .add_message(create_denom_msg);
 
     Ok(res)
 }
@@ -101,7 +101,7 @@ pub fn mint_tokens(
 ) -> Result<Response<OsmosisMsg>, TokenFactoryError> {
     deps.api.addr_validate(&mint_to_address)?;
 
-    if amount.eq(&Uint128::new(0 as u128)) {
+    if amount.eq(&Uint128::new(0_u128)) {
         return Result::Err(TokenFactoryError::ZeroAmount {});
     }
 
@@ -138,7 +138,7 @@ pub fn burn_tokens(
 
     let res = Response::new()
         .add_attribute("method", "burn_tokens")
-        .add_message(<OsmosisMsg>::from(burn_token_msg));
+        .add_message(burn_token_msg);
 
     Ok(res)
 }
