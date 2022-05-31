@@ -269,7 +269,6 @@ mod tests {
         let msg = InstantiateMsg {};
         let info = mock_info("creator", &coins(1000, "uosmo"));
 
-        // we can just call .unwrap() to assert this was a success
         let res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
         assert_eq!(0, res.messages.len());
     }
