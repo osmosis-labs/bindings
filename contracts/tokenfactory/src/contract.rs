@@ -123,7 +123,7 @@ pub fn burn_tokens(
     burn_from_address: String,
 ) -> Result<Response<OsmosisMsg>, TokenFactoryError> {
     if burn_from_address.len() > 0 {
-        return Result::Err(TokenFactoryError::AddressNotSupported{ address: burn_from_address })
+        return Result::Err(TokenFactoryError::BurnFromAddressNotSupported{ address: burn_from_address })
     }
 
     if amount.eq(&Uint128::new(0 as u128)) {
@@ -613,18 +613,18 @@ mod tests {
     fn msg_burn_tokens_input_adddress() {
         let mut deps = mock_dependencies();
 
-        const NEW_ADMIN_ADDR: &str = "newadmin";
-        let mint_amount = Uint128::new(100 as u128);
+        const BURN_FROM_ADDR: &str = "burnfrom";
+        let burn_amount = Uint128::new(100 as u128);
         let full_denom_name: &str =
         &format!("{}/{}/{}", DENOM_PREFIX, MOCK_CONTRACT_ADDR, DENOM_NAME)[..];
 
         let info = mock_info("creator", &coins(2, "token"));
 
-        let msg = ExecuteMsg::BurnTokens { denom: String::from(full_denom_name), burn_from_address: String::from(NEW_ADMIN_ADDR), amount: mint_amount };
+        let msg = ExecuteMsg::BurnTokens { denom: String::from(full_denom_name), burn_from_address: String::from(BURN_FROM_ADDR), amount: burn_amount };
         let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
 
-        let expected_error = TokenFactoryError::AddressNotSupported{
-            address: String::from(NEW_ADMIN_ADDR),
+        let expected_error = TokenFactoryError::BurnFromAddressNotSupported{
+            address: String::from(BURN_FROM_ADDR),
         };
 
         assert_eq!(expected_error, err)
