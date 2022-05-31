@@ -169,7 +169,7 @@ mod tests {
     use super::*;
     use cosmwasm_std::testing::{mock_env, mock_info, MockApi, MockStorage, MockQuerier, MOCK_CONTRACT_ADDR};
     use cosmwasm_std::{
-        coins, OwnedDeps, from_binary, CosmosMsg, Attribute, StdError, SystemResult, SystemError, Querier
+        coins, OwnedDeps, from_binary, CosmosMsg, Attribute, StdError, SystemResult, SystemError, Querier, ContractResult
     };
     use osmo_bindings::{ OsmosisQuery };
     use osmo_bindings_test::{ OsmosisApp };
@@ -187,13 +187,25 @@ mod tests {
         }
     }
 
-    fn mock_dependencies_with_custom_quierier_s() -> OwnedDeps<MockStorage, MockApi, MockQuerier<OsmosisQuery>, OsmosisQuery> {
+    fn mock_dependencies_with_query_error<'a>() -> OwnedDeps<MockStorage, MockApi, MockQuerier<OsmosisQuery>, OsmosisQuery> {
         let custom_querier: MockQuerier<OsmosisQuery> =
             MockQuerier::new(&[(MOCK_CONTRACT_ADDR, &[])]).with_custom_handler(|a| {
-                SystemResult::Err(SystemError::InvalidRequest {
-                    error: "not implemented".to_string(),
-                    request: Default::default(),
-                })
+                match a {
+                    OsmosisQuery::FullDenom{creator_addr, subdenom} => {
+                        let binary_request = to_binary(a).unwrap();
+
+                        if creator_addr.eq("") {
+                            return SystemResult::Err(SystemError::InvalidRequest{ error: String::from("invalid creator address"), request: binary_request })
+                        }
+                        if subdenom.eq("") {
+                            return SystemResult::Err(SystemError::InvalidRequest{ error: String::from("invalid subdenom"), request: binary_request })
+                        }
+                        return SystemResult::Ok(ContractResult::Ok(binary_request));
+                    }
+                    _ => {
+                        SystemResult::Err(SystemError::Unknown{})
+                    }
+                }
             });
         mock_dependencies_with_custom_quierier(custom_querier)
     }
@@ -359,6 +371,50 @@ mod tests {
         let expected_error = TokenFactoryError::InvalidDenom{ denom: String::from(full_denom_name), message:String::from("prefix must be 'factory', was invalid") };
 
         assert_eq!(expected_error, err)
+    }
+
+    #[test]
+    fn msg_change_admin_invalid_address_in_denom() {
+        let mut deps = mock_dependencies_with_query_error();
+
+        const NEW_ADMIN_ADDR: &str = "newadmin";
+
+        let info = mock_info("creator", &coins(2, "token"));
+
+        let full_denom_name: &str = &format!("{}/{}/{}", DENOM_PREFIX, "", DENOM_NAME)[..]; // empty contract address
+
+        let msg = ExecuteMsg::ChangeAdmin { denom: String::from(full_denom_name), new_admin_address: String::from(NEW_ADMIN_ADDR) };
+        let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
+
+        match err {
+            TokenFactoryError::InvalidDenom{denom, message} => {
+                assert_eq!(String::from(full_denom_name), denom);
+                assert_eq!(true, message.contains("invalid creator address"))
+            }
+            err => panic!("Unexpected error: {:?}", err),
+        }
+    }
+
+    #[test]
+    fn msg_change_admin_invalid_subdenom_in_denom() {
+        let mut deps = mock_dependencies_with_query_error();
+
+        const NEW_ADMIN_ADDR: &str = "newadmin";
+
+        let info = mock_info("creator", &coins(2, "token"));
+
+        let full_denom_name: &str = &format!("{}/{}/{}", DENOM_PREFIX, MOCK_CONTRACT_ADDR, "")[..]; // empty subdenom
+
+        let msg = ExecuteMsg::ChangeAdmin { denom: String::from(full_denom_name), new_admin_address: String::from(NEW_ADMIN_ADDR) };
+        let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
+
+        match err {
+            TokenFactoryError::InvalidDenom{denom, message} => {
+                assert_eq!(String::from(full_denom_name), denom);
+                assert_eq!(true, message.contains("invalid subdenom"))
+            }
+            err => panic!("Unexpected error: {:?}", err),
+        }
     }
 
     #[test]
