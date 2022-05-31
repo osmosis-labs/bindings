@@ -79,39 +79,7 @@ pub fn change_admin(
 ) -> Result<Response<OsmosisMsg>, TokenFactoryError> {
     deps.api.addr_validate(&new_admin_address)?;
 
-    let denom_to_split = denom.clone();
-    let tokenfactory_denom_parts: Vec<&str> = denom_to_split.split("/").collect();
-
-    if tokenfactory_denom_parts.len() != 3 {
-        return Result::Err(TokenFactoryError::InvalidDenom {
-            denom: denom,
-            message: String::from(std::format!(
-                "denom must have 3 parts separated by /, had {}",
-                tokenfactory_denom_parts.len()
-            )),
-        });
-    }
-
-    let prefix = tokenfactory_denom_parts[0];
-    let creator_address = tokenfactory_denom_parts[1];
-    let subdenom = tokenfactory_denom_parts[2];
-
-    if !prefix.eq_ignore_ascii_case("factory") {
-        return Result::Err(TokenFactoryError::InvalidDenom {
-            denom: denom,
-            message: String::from(std::format!("prefix must be 'factory', was {}", prefix)),
-        });
-    }
-
-    // Validate denom by attempting to query for full denom
-    let response = OsmosisQuerier::new(&deps.querier)
-        .full_denom(String::from(creator_address), String::from(subdenom));
-    if response.is_err() {
-        return Result::Err(TokenFactoryError::InvalidDenom {
-            denom: denom,
-            message: response.err().unwrap().to_string(),
-        });
-    }
+    validate_denom(deps, denom.clone())?;
 
     let change_admin_msg = OsmosisMsg::ChangeAdmin {
         denom,
@@ -152,7 +120,15 @@ pub fn burn_tokens(
     amount: Uint128,
     burn_from_address: String,
 ) -> Result<Response<OsmosisMsg>, TokenFactoryError> {
-    deps.api.addr_validate(&burn_from_address)?;
+    if burn_from_address.len() > 0 {
+        return Result::Err(TokenFactoryError::BurnTokensFromAddressNotSupported{ address: burn_from_address })
+    }
+
+    if amount.eq(&Uint128::new(0 as u128)) {
+        return Result::Err(TokenFactoryError::BurnTokensZeroBurnAmount{})
+    }
+
+    validate_denom(deps, denom.clone())?;
 
     let burn_token_msg = OsmosisMsg::burn_contract_tokens(denom, amount, burn_from_address);
 
@@ -181,6 +157,44 @@ fn get_denom(deps: Deps<OsmosisQuery>, creator_addr: String, subdenom: String) -
         denom: response.denom,
     };
     get_denom_response
+}
+
+fn validate_denom(deps: DepsMut<OsmosisQuery>, denom: String) -> Result<(), TokenFactoryError> {
+    let denom_to_split = denom.clone();
+    let tokenfactory_denom_parts: Vec<&str> = denom_to_split.split("/").collect();
+
+    if tokenfactory_denom_parts.len() != 3 {
+        return Result::Err(TokenFactoryError::InvalidDenom {
+            denom: denom,
+            message: String::from(std::format!(
+                "denom must have 3 parts separated by /, had {}",
+                tokenfactory_denom_parts.len()
+            )),
+        });
+    }
+
+    let prefix = tokenfactory_denom_parts[0];
+    let creator_address = tokenfactory_denom_parts[1];
+    let subdenom = tokenfactory_denom_parts[2];
+
+    if !prefix.eq_ignore_ascii_case("factory") {
+        return Result::Err(TokenFactoryError::InvalidDenom {
+            denom: denom,
+            message: String::from(std::format!("prefix must be 'factory', was {}", prefix)),
+        });
+    }
+
+    // Validate denom by attempting to query for full denom
+    let response = OsmosisQuerier::new(&deps.querier)
+        .full_denom(String::from(creator_address), String::from(subdenom));
+    if response.is_err() {
+        return Result::Err(TokenFactoryError::InvalidDenom {
+            denom: denom,
+            message: response.err().unwrap().to_string(),
+        });
+    }
+
+    Result::Ok(())
 }
 
 #[cfg(test)]
