@@ -167,9 +167,9 @@ fn get_denom(deps: Deps<OsmosisQuery>, creator_addr: String, subdenom: String) -
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cosmwasm_std::testing::{mock_env, mock_info, MockApi, MockStorage, MOCK_CONTRACT_ADDR,};
+    use cosmwasm_std::testing::{mock_env, mock_info, MockApi, MockStorage, MockQuerier, MOCK_CONTRACT_ADDR};
     use cosmwasm_std::{
-        coins, Coin, OwnedDeps, from_binary, CosmosMsg, Attribute, StdError
+        coins, OwnedDeps, from_binary, CosmosMsg, Attribute, StdError, SystemResult, SystemError, Querier
     };
     use osmo_bindings::{ OsmosisQuery };
     use osmo_bindings_test::{ OsmosisApp };
@@ -178,21 +178,34 @@ mod tests {
     const DENOM_NAME: &str = "mydenom";
     const DENOM_PREFIX: &str = "factory";
 
-    pub fn mock_dependencies(
-        contract_balance: &[Coin],
-    ) -> OwnedDeps<MockStorage, MockApi, OsmosisApp, OsmosisQuery> {
-        let custom_querier = OsmosisApp::new();
+    fn mock_dependencies_with_custom_quierier<Q: Querier>(querier: Q) -> OwnedDeps<MockStorage, MockApi, Q, OsmosisQuery> {
         OwnedDeps {
             storage: MockStorage::default(),
             api: MockApi::default(),
-            querier: custom_querier,
+            querier,
             custom_query_type: PhantomData,
         }
     }
 
+    fn mock_dependencies_with_custom_quierier_s() -> OwnedDeps<MockStorage, MockApi, MockQuerier<OsmosisQuery>, OsmosisQuery> {
+        let custom_querier: MockQuerier<OsmosisQuery> =
+            MockQuerier::new(&[(MOCK_CONTRACT_ADDR, &[])]).with_custom_handler(|a| {
+                SystemResult::Err(SystemError::InvalidRequest {
+                    error: "not implemented".to_string(),
+                    request: Default::default(),
+                })
+            });
+        mock_dependencies_with_custom_quierier(custom_querier)
+    }
+
+    pub fn mock_dependencies() -> OwnedDeps<MockStorage, MockApi, OsmosisApp, OsmosisQuery> {
+        let custom_querier = OsmosisApp::new();
+        mock_dependencies_with_custom_quierier(custom_querier)
+    }
+
     #[test]
     fn proper_initialization() {
-        let mut deps = mock_dependencies(&[]);
+        let mut deps = mock_dependencies();
 
         let msg = InstantiateMsg { };
         let info = mock_info("creator", &coins(1000, "uosmo"));
@@ -204,7 +217,7 @@ mod tests {
 
     #[test]
     fn query_get_denom() {
-        let deps = mock_dependencies(&[]);
+        let deps = mock_dependencies();
         let get_denom_query = QueryMsg::GetDenom{ creator_address: String::from(MOCK_CONTRACT_ADDR), subdenom: String::from(DENOM_NAME)};
         let response = query(deps.as_ref(), mock_env(), get_denom_query).unwrap();
         let get_denom_response: GetDenomResponse = from_binary(&response).unwrap();
@@ -213,7 +226,7 @@ mod tests {
 
     #[test]
     fn msg_create_denom_success() {
-        let mut deps = mock_dependencies(&[]);
+        let mut deps = mock_dependencies();
 
         let subdenom: String = String::from(DENOM_NAME);
 
@@ -238,7 +251,7 @@ mod tests {
 
     #[test]
     fn msg_create_denom_invalid_subdenom() {
-        let mut deps = mock_dependencies(&[]);
+        let mut deps = mock_dependencies();
 
         let subdenom: String = String::from("");
 
@@ -250,7 +263,7 @@ mod tests {
 
     #[test]
     fn msg_change_admin_success() {
-        let mut deps = mock_dependencies(&[]);
+        let mut deps = mock_dependencies();
 
         const NEW_ADMIN_ADDR: &str = "newadmin";
 
@@ -278,7 +291,7 @@ mod tests {
 
     #[test]
     fn msg_change_admin_empty_address() {
-        let mut deps = mock_dependencies(&[]);
+        let mut deps = mock_dependencies();
 
         const EMPTY_ADDR: &str = "";
 
@@ -296,7 +309,7 @@ mod tests {
 
     #[test]
     fn msg_change_admin_too_many_parts_in_denom_invalid() {
-        let mut deps = mock_dependencies(&[]);
+        let mut deps = mock_dependencies();
 
         const NEW_ADMIN_ADDR: &str = "newadmin";
 
@@ -314,7 +327,7 @@ mod tests {
 
     #[test]
     fn msg_change_admin_too_little_parts_in_denom_invalid() {
-        let mut deps = mock_dependencies(&[]);
+        let mut deps = mock_dependencies();
 
         const NEW_ADMIN_ADDR: &str = "newadmin";
 
@@ -332,7 +345,7 @@ mod tests {
 
     #[test]
     fn msg_change_admin_invalid_prefix() {
-        let mut deps = mock_dependencies(&[]);
+        let mut deps = mock_dependencies();
 
         const NEW_ADMIN_ADDR: &str = "newadmin";
 
