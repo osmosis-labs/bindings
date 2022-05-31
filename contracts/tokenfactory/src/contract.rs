@@ -102,7 +102,7 @@ pub fn mint_tokens(
     deps.api.addr_validate(&mint_to_address)?;
 
     if amount.eq(&Uint128::new(0 as u128)) {
-        return Result::Err(TokenFactoryError::ZeroAmount{})
+        return Result::Err(TokenFactoryError::ZeroAmount {});
     }
 
     validate_denom(deps, denom.clone())?;
@@ -123,11 +123,13 @@ pub fn burn_tokens(
     burn_from_address: String,
 ) -> Result<Response<OsmosisMsg>, TokenFactoryError> {
     if !burn_from_address.is_empty() {
-        return Result::Err(TokenFactoryError::BurnFromAddressNotSupported{ address: burn_from_address })
+        return Result::Err(TokenFactoryError::BurnFromAddressNotSupported {
+            address: burn_from_address,
+        });
     }
 
     if amount.eq(&Uint128::new(0_u128)) {
-        return Result::Err(TokenFactoryError::ZeroAmount{})
+        return Result::Err(TokenFactoryError::ZeroAmount {});
     }
 
     validate_denom(deps, denom.clone())?;
@@ -492,12 +494,11 @@ mod tests {
         match err {
             TokenFactoryError::InvalidDenom { denom, message } => {
                 assert_eq!(String::from(full_denom_name), denom);
-                assert_eq!(message.contains("invalid subdenom"));
+                assert!(message.contains("invalid subdenom"));
             }
             err => panic!("Unexpected error: {:?}", err),
         }
     }
-
 
     #[test]
     fn msg_mint_tokens_success() {
@@ -506,12 +507,15 @@ mod tests {
         const NEW_ADMIN_ADDR: &str = "newadmin";
         let mint_amount = Uint128::new(100_u128);
         let full_denom_name: &str =
-        &format!("{}/{}/{}", DENOM_PREFIX, MOCK_CONTRACT_ADDR, DENOM_NAME)[..];
-
+            &format!("{}/{}/{}", DENOM_PREFIX, MOCK_CONTRACT_ADDR, DENOM_NAME)[..];
 
         let info = mock_info("creator", &coins(2, "token"));
 
-        let msg = ExecuteMsg::MintTokens {denom: String::from(full_denom_name), amount: mint_amount, mint_to_address: String::from(NEW_ADMIN_ADDR)};
+        let msg = ExecuteMsg::MintTokens {
+            denom: String::from(full_denom_name),
+            amount: mint_amount,
+            mint_to_address: String::from(NEW_ADMIN_ADDR),
+        };
         let res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
 
         assert_eq!(1, res.messages.len());
@@ -546,7 +550,11 @@ mod tests {
 
         let info = mock_info("creator", &coins(2, "token"));
 
-        let msg = ExecuteMsg::MintTokens {denom: String::from(full_denom_name), amount: mint_amount, mint_to_address: String::from(NEW_ADMIN_ADDR)};
+        let msg = ExecuteMsg::MintTokens {
+            denom: String::from(full_denom_name),
+            amount: mint_amount,
+            mint_to_address: String::from(NEW_ADMIN_ADDR),
+        };
         let err = execute(deps.as_mut(), mock_env(), info.clone(), msg).unwrap_err();
         let expected_error = TokenFactoryError::InvalidDenom {
             denom: String::from(full_denom_name),
@@ -556,7 +564,11 @@ mod tests {
         assert_eq!(expected_error, err);
 
         let full_denom_name: &str = &format!("{}/{}", DENOM_PREFIX, MOCK_CONTRACT_ADDR)[..];
-        let msg = ExecuteMsg::MintTokens {denom: String::from(full_denom_name), amount: mint_amount, mint_to_address: String::from(NEW_ADMIN_ADDR)};
+        let msg = ExecuteMsg::MintTokens {
+            denom: String::from(full_denom_name),
+            amount: mint_amount,
+            mint_to_address: String::from(NEW_ADMIN_ADDR),
+        };
         let err = execute(deps.as_mut(), mock_env(), info.clone(), msg).unwrap_err();
         let expected_error = TokenFactoryError::InvalidDenom {
             denom: String::from(full_denom_name),
@@ -566,8 +578,12 @@ mod tests {
         assert_eq!(expected_error, err);
 
         let full_denom_name: &str =
-        &format!("{}/{}/{}", "invalid", MOCK_CONTRACT_ADDR, DENOM_NAME)[..];
-        let msg = ExecuteMsg::MintTokens {denom: String::from(full_denom_name), amount: mint_amount, mint_to_address: String::from(NEW_ADMIN_ADDR)};
+            &format!("{}/{}/{}", "invalid", MOCK_CONTRACT_ADDR, DENOM_NAME)[..];
+        let msg = ExecuteMsg::MintTokens {
+            denom: String::from(full_denom_name),
+            amount: mint_amount,
+            mint_to_address: String::from(NEW_ADMIN_ADDR),
+        };
         let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
         let expected_error = TokenFactoryError::InvalidDenom {
             denom: String::from(full_denom_name),
@@ -583,11 +599,15 @@ mod tests {
 
         let mint_amount = Uint128::new(100_u128);
         let full_denom_name: &str =
-        &format!("{}/{}/{}", DENOM_PREFIX, MOCK_CONTRACT_ADDR, DENOM_NAME)[..];
+            &format!("{}/{}/{}", DENOM_PREFIX, MOCK_CONTRACT_ADDR, DENOM_NAME)[..];
 
         let info = mock_info("creator", &coins(2, "token"));
 
-        let msg = ExecuteMsg::BurnTokens { denom: String::from(full_denom_name), burn_from_address: String::from(""), amount: mint_amount };
+        let msg = ExecuteMsg::BurnTokens {
+            denom: String::from(full_denom_name),
+            burn_from_address: String::from(""),
+            amount: mint_amount,
+        };
         let res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
 
         assert_eq!(1, res.messages.len());
@@ -615,14 +635,18 @@ mod tests {
         const BURN_FROM_ADDR: &str = "burnfrom";
         let burn_amount = Uint128::new(100_u128);
         let full_denom_name: &str =
-        &format!("{}/{}/{}", DENOM_PREFIX, MOCK_CONTRACT_ADDR, DENOM_NAME)[..];
+            &format!("{}/{}/{}", DENOM_PREFIX, MOCK_CONTRACT_ADDR, DENOM_NAME)[..];
 
         let info = mock_info("creator", &coins(2, "token"));
 
-        let msg = ExecuteMsg::BurnTokens { denom: String::from(full_denom_name), burn_from_address: String::from(BURN_FROM_ADDR), amount: burn_amount };
+        let msg = ExecuteMsg::BurnTokens {
+            denom: String::from(full_denom_name),
+            burn_from_address: String::from(BURN_FROM_ADDR),
+            amount: burn_amount,
+        };
         let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
 
-        let expected_error = TokenFactoryError::BurnFromAddressNotSupported{
+        let expected_error = TokenFactoryError::BurnFromAddressNotSupported {
             address: String::from(BURN_FROM_ADDR),
         };
 
