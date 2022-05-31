@@ -16,8 +16,8 @@ to import and use some test utilities.
 There are 4 messages:
 - `ExecuteMsg::CreateDenom` maps to `OsmosisMsg::CreateDenom`
 - `ExecuteMsg::ChangeAdmin` maps to `OsmosisMsg::ChangeAdmin`
-- `ExecuteMsg::BurnTokens` maps to `OsmosisMsg::MintTokens`
-- `ExecuteMsg::MintTokens` maps to `OsmosisMsg::BurnTokens`
+- `ExecuteMsg::BurnTokens` maps to `OsmosisMsg::BurnTokens`
+- `ExecuteMsg::MintTokens` maps to `OsmosisMsg::MintTokens`
 
 ## Query
 
