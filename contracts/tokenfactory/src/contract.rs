@@ -167,7 +167,7 @@ fn validate_denom(deps: DepsMut<OsmosisQuery>, denom: String) -> Result<(), Toke
 
     if tokenfactory_denom_parts.len() != 3 {
         return Result::Err(TokenFactoryError::InvalidDenom {
-            denom: denom,
+            denom,
             message: String::from(std::format!(
                 "denom must have 3 parts separated by /, had {}",
                 tokenfactory_denom_parts.len()
@@ -181,7 +181,7 @@ fn validate_denom(deps: DepsMut<OsmosisQuery>, denom: String) -> Result<(), Toke
 
     if !prefix.eq_ignore_ascii_case("factory") {
         return Result::Err(TokenFactoryError::InvalidDenom {
-            denom: denom,
+            denom,
             message: String::from(std::format!("prefix must be 'factory', was {}", prefix)),
         });
     }
@@ -191,7 +191,7 @@ fn validate_denom(deps: DepsMut<OsmosisQuery>, denom: String) -> Result<(), Toke
         .full_denom(String::from(creator_address), String::from(subdenom));
     if response.is_err() {
         return Result::Err(TokenFactoryError::InvalidDenom {
-            denom: denom,
+            denom,
             message: response.err().unwrap().to_string(),
         });
     }
@@ -530,7 +530,7 @@ mod tests {
         let expected_attribute = Attribute::new("method", "mint_tokens");
         let actual_attribute = res.attributes.get(0).unwrap();
         assert_eq!(expected_attribute, actual_attribute);
-        
+
         assert_eq!(res.data.ok_or(0), Err(0));
     }
 
@@ -605,7 +605,7 @@ mod tests {
         let expected_attribute = Attribute::new("method", "burn_tokens");
         let actual_attribute = res.attributes.get(0).unwrap();
         assert_eq!(expected_attribute, actual_attribute);
-        
+
         assert_eq!(res.data.ok_or(0), Err(0))
     }
 
