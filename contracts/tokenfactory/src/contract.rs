@@ -389,6 +389,20 @@ mod tests {
     }
 
     #[test]
+    fn msg_validate_denom_too_many_parts_valid() {
+        let mut deps = mock_dependencies();
+
+        // too many parts in denom
+        let full_denom_name: &str =
+            &format!("{}/{}/{}", DENOM_PREFIX, MOCK_CONTRACT_ADDR, DENOM_NAME)[..];
+
+        assert_eq!(
+            (),
+            validate_denom(deps.as_mut(), String::from(full_denom_name)).unwrap()
+        );
+    }
+
+    #[test]
     fn msg_change_admin_invalid_denom() {
         let mut deps = mock_dependencies();
 
@@ -414,89 +428,6 @@ mod tests {
         };
 
         assert_eq!(expected_error, err);
-
-        // too little parts in denom
-        let full_denom_name: &str = &format!("{}/{}", DENOM_PREFIX, MOCK_CONTRACT_ADDR)[..];
-
-        let msg = ExecuteMsg::ChangeAdmin {
-            denom: String::from(full_denom_name),
-            new_admin_address: String::from(NEW_ADMIN_ADDR),
-        };
-        let err = execute(deps.as_mut(), mock_env(), info.clone(), msg).unwrap_err();
-
-        let expected_error = TokenFactoryError::InvalidDenom {
-            denom: String::from(full_denom_name),
-            message: String::from("denom must have 3 parts separated by /, had 2"),
-        };
-
-        assert_eq!(expected_error, err);
-
-        // invalid denom prefix
-        let full_denom_name: &str =
-            &format!("{}/{}/{}", "invalid", MOCK_CONTRACT_ADDR, DENOM_NAME)[..];
-
-        let msg = ExecuteMsg::ChangeAdmin {
-            denom: String::from(full_denom_name),
-            new_admin_address: String::from(NEW_ADMIN_ADDR),
-        };
-        let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
-
-        let expected_error = TokenFactoryError::InvalidDenom {
-            denom: String::from(full_denom_name),
-            message: String::from("prefix must be 'factory', was invalid"),
-        };
-
-        assert_eq!(expected_error, err)
-    }
-
-    #[test]
-    fn msg_change_admin_invalid_address_in_denom() {
-        let mut deps = mock_dependencies_with_query_error();
-
-        const NEW_ADMIN_ADDR: &str = "newadmin";
-
-        let info = mock_info("creator", &coins(2, "token"));
-
-        let full_denom_name: &str = &format!("{}/{}/{}", DENOM_PREFIX, "", DENOM_NAME)[..]; // empty contract address
-
-        let msg = ExecuteMsg::ChangeAdmin {
-            denom: String::from(full_denom_name),
-            new_admin_address: String::from(NEW_ADMIN_ADDR),
-        };
-        let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
-
-        match err {
-            TokenFactoryError::InvalidDenom { denom, message } => {
-                assert_eq!(String::from(full_denom_name), denom);
-                assert!(message.contains("invalid creator address"))
-            }
-            err => panic!("Unexpected error: {:?}", err),
-        }
-    }
-
-    #[test]
-    fn msg_change_admin_invalid_subdenom_in_denom() {
-        let mut deps = mock_dependencies_with_query_error();
-
-        const NEW_ADMIN_ADDR: &str = "newadmin";
-
-        let info = mock_info("creator", &coins(2, "token"));
-
-        let full_denom_name: &str = &format!("{}/{}/{}", DENOM_PREFIX, MOCK_CONTRACT_ADDR, "")[..]; // empty subdenom
-
-        let msg = ExecuteMsg::ChangeAdmin {
-            denom: String::from(full_denom_name),
-            new_admin_address: String::from(NEW_ADMIN_ADDR),
-        };
-        let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
-
-        match err {
-            TokenFactoryError::InvalidDenom { denom, message } => {
-                assert_eq!(String::from(full_denom_name), denom);
-                assert!(message.contains("invalid subdenom"));
-            }
-            err => panic!("Unexpected error: {:?}", err),
-        }
     }
 
     #[test]
@@ -504,7 +435,9 @@ mod tests {
         let mut deps = mock_dependencies();
 
         const NEW_ADMIN_ADDR: &str = "newadmin";
+
         let mint_amount = Uint128::new(100_u128);
+
         let full_denom_name: &str =
             &format!("{}/{}/{}", DENOM_PREFIX, MOCK_CONTRACT_ADDR, DENOM_NAME)[..];
 
@@ -540,27 +473,11 @@ mod tests {
     fn msg_mint_invalid_denom() {
         let mut deps = mock_dependencies();
 
-        let full_denom_name: &str = &format!(
-            "{}/{}/{}/invalid",
-            DENOM_PREFIX, MOCK_CONTRACT_ADDR, DENOM_NAME
-        )[..];
         const NEW_ADMIN_ADDR: &str = "newadmin";
+
         let mint_amount = Uint128::new(100_u128);
 
         let info = mock_info("creator", &coins(2, "token"));
-
-        let msg = ExecuteMsg::MintTokens {
-            denom: String::from(full_denom_name),
-            amount: mint_amount,
-            mint_to_address: String::from(NEW_ADMIN_ADDR),
-        };
-        let err = execute(deps.as_mut(), mock_env(), info.clone(), msg).unwrap_err();
-        let expected_error = TokenFactoryError::InvalidDenom {
-            denom: String::from(full_denom_name),
-            message: String::from("denom must have 3 parts separated by /, had 4"),
-        };
-
-        assert_eq!(expected_error, err);
 
         let full_denom_name: &str = &format!("{}/{}", DENOM_PREFIX, MOCK_CONTRACT_ADDR)[..];
         let msg = ExecuteMsg::MintTokens {
@@ -575,21 +492,6 @@ mod tests {
         };
 
         assert_eq!(expected_error, err);
-
-        let full_denom_name: &str =
-            &format!("{}/{}/{}", "invalid", MOCK_CONTRACT_ADDR, DENOM_NAME)[..];
-        let msg = ExecuteMsg::MintTokens {
-            denom: String::from(full_denom_name),
-            amount: mint_amount,
-            mint_to_address: String::from(NEW_ADMIN_ADDR),
-        };
-        let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
-        let expected_error = TokenFactoryError::InvalidDenom {
-            denom: String::from(full_denom_name),
-            message: String::from("prefix must be 'factory', was invalid"),
-        };
-
-        assert_eq!(expected_error, err)
     }
 
     #[test]
@@ -650,5 +552,77 @@ mod tests {
         };
 
         assert_eq!(expected_error, err)
+    }
+
+    #[test]
+    fn msg_validate_denom_too_many_parts_invalid() {
+        let mut deps = mock_dependencies();
+
+        // too many parts in denom
+        let full_denom_name: &str = &format!(
+            "{}/{}/{}/invalid",
+            DENOM_PREFIX, MOCK_CONTRACT_ADDR, DENOM_NAME
+        )[..];
+
+        let err = validate_denom(deps.as_mut(), String::from(full_denom_name)).unwrap_err();
+
+        let expected_error = TokenFactoryError::InvalidDenom {
+            denom: String::from(full_denom_name),
+            message: String::from("denom must have 3 parts separated by /, had 4"),
+        };
+
+        assert_eq!(expected_error, err);
+    }
+
+    #[test]
+    fn msg_validate_denom_not_enough_parts_invalid() {
+        let mut deps = mock_dependencies();
+
+        // too little parts in denom
+        let full_denom_name: &str = &format!("{}/{}", DENOM_PREFIX, MOCK_CONTRACT_ADDR)[..];
+
+        let err = validate_denom(deps.as_mut(), String::from(full_denom_name)).unwrap_err();
+
+        let expected_error = TokenFactoryError::InvalidDenom {
+            denom: String::from(full_denom_name),
+            message: String::from("denom must have 3 parts separated by /, had 2"),
+        };
+
+        assert_eq!(expected_error, err);
+    }
+
+    #[test]
+    fn msg_validate_denom_denom_prefix_invalid() {
+        let mut deps = mock_dependencies();
+
+        // invalid denom prefix
+        let full_denom_name: &str =
+            &format!("{}/{}/{}", "invalid", MOCK_CONTRACT_ADDR, DENOM_NAME)[..];
+
+        let err = validate_denom(deps.as_mut(), String::from(full_denom_name)).unwrap_err();
+
+        let expected_error = TokenFactoryError::InvalidDenom {
+            denom: String::from(full_denom_name),
+            message: String::from("prefix must be 'factory', was invalid"),
+        };
+
+        assert_eq!(expected_error, err);
+    }
+
+    #[test]
+    fn msg_validate_denom_creator_address_invalid() {
+        let mut deps = mock_dependencies_with_query_error();
+
+        let full_denom_name: &str = &format!("{}/{}/{}", DENOM_PREFIX, "", DENOM_NAME)[..]; // empty contract address
+
+        let err = validate_denom(deps.as_mut(), String::from(full_denom_name)).unwrap_err();
+
+        match err {
+            TokenFactoryError::InvalidDenom { denom, message } => {
+                assert_eq!(String::from(full_denom_name), denom);
+                assert!(message.contains("invalid creator address"))
+            }
+            err => panic!("Unexpected error: {:?}", err),
+        }
     }
 }
