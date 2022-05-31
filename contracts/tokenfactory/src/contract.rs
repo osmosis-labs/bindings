@@ -396,10 +396,7 @@ mod tests {
         let full_denom_name: &str =
             &format!("{}/{}/{}", DENOM_PREFIX, MOCK_CONTRACT_ADDR, DENOM_NAME)[..];
 
-        assert_eq!(
-            (),
-            validate_denom(deps.as_mut(), String::from(full_denom_name)).unwrap()
-        );
+        validate_denom(deps.as_mut(), String::from(full_denom_name)).unwrap()
     }
 
     #[test]
@@ -420,7 +417,7 @@ mod tests {
             denom: String::from(full_denom_name),
             new_admin_address: String::from(NEW_ADMIN_ADDR),
         };
-        let err = execute(deps.as_mut(), mock_env(), info.clone(), msg).unwrap_err();
+        let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
 
         let expected_error = TokenFactoryError::InvalidDenom {
             denom: String::from(full_denom_name),
@@ -485,7 +482,7 @@ mod tests {
             amount: mint_amount,
             mint_to_address: String::from(NEW_ADMIN_ADDR),
         };
-        let err = execute(deps.as_mut(), mock_env(), info.clone(), msg).unwrap_err();
+        let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
         let expected_error = TokenFactoryError::InvalidDenom {
             denom: String::from(full_denom_name),
             message: String::from("denom must have 3 parts separated by /, had 2"),
