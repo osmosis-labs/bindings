@@ -101,11 +101,13 @@ pub fn mint_tokens(
 ) -> Result<Response<OsmosisMsg>, TokenFactoryError> {
     deps.api.addr_validate(&mint_to_address)?;
 
-    let mint_tokens_msg = OsmosisMsg::MintTokens {
-        denom,
-        amount,
-        mint_to_address,
-    };
+    if amount.eq(&Uint128::new(0 as u128)) {
+        return Result::Err(TokenFactoryError::ZeroAmount{})
+    }
+
+    validate_denom(deps, denom.clone())?;
+
+    let mint_tokens_msg = OsmosisMsg::mint_contract_tokens(denom, amount, mint_to_address);
 
     let res = Response::new()
         .add_attribute("method", "mint_tokens")
@@ -121,11 +123,11 @@ pub fn burn_tokens(
     burn_from_address: String,
 ) -> Result<Response<OsmosisMsg>, TokenFactoryError> {
     if burn_from_address.len() > 0 {
-        return Result::Err(TokenFactoryError::BurnTokensFromAddressNotSupported{ address: burn_from_address })
+        return Result::Err(TokenFactoryError::AddressNotSupported{ address: burn_from_address })
     }
 
     if amount.eq(&Uint128::new(0 as u128)) {
-        return Result::Err(TokenFactoryError::BurnTokensZeroBurnAmount{})
+        return Result::Err(TokenFactoryError::ZeroAmount{})
     }
 
     validate_denom(deps, denom.clone())?;
@@ -387,13 +389,14 @@ mod tests {
     }
 
     #[test]
-    fn msg_change_admin_too_many_parts_in_denom_invalid() {
+    fn msg_change_admin_invalid_denom() {
         let mut deps = mock_dependencies();
 
         const NEW_ADMIN_ADDR: &str = "newadmin";
 
         let info = mock_info("creator", &coins(2, "token"));
 
+        // too many parts in denom
         let full_denom_name: &str = &format!(
             "{}/{}/{}/invalid",
             DENOM_PREFIX, MOCK_CONTRACT_ADDR, DENOM_NAME
@@ -403,48 +406,32 @@ mod tests {
             denom: String::from(full_denom_name),
             new_admin_address: String::from(NEW_ADMIN_ADDR),
         };
-        let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
+        let err = execute(deps.as_mut(), mock_env(), info.clone(), msg).unwrap_err();
 
         let expected_error = TokenFactoryError::InvalidDenom {
             denom: String::from(full_denom_name),
             message: String::from("denom must have 3 parts separated by /, had 4"),
         };
 
-        assert_eq!(expected_error, err)
-    }
+        assert_eq!(expected_error, err);
 
-    #[test]
-    fn msg_change_admin_too_little_parts_in_denom_invalid() {
-        let mut deps = mock_dependencies();
-
-        const NEW_ADMIN_ADDR: &str = "newadmin";
-
-        let info = mock_info("creator", &coins(2, "token"));
-
+        // too little parts in denom
         let full_denom_name: &str = &format!("{}/{}", DENOM_PREFIX, MOCK_CONTRACT_ADDR)[..];
 
         let msg = ExecuteMsg::ChangeAdmin {
             denom: String::from(full_denom_name),
             new_admin_address: String::from(NEW_ADMIN_ADDR),
         };
-        let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
+        let err = execute(deps.as_mut(), mock_env(), info.clone(), msg).unwrap_err();
 
         let expected_error = TokenFactoryError::InvalidDenom {
             denom: String::from(full_denom_name),
             message: String::from("denom must have 3 parts separated by /, had 2"),
         };
 
-        assert_eq!(expected_error, err)
-    }
+        assert_eq!(expected_error, err);
 
-    #[test]
-    fn msg_change_admin_invalid_prefix() {
-        let mut deps = mock_dependencies();
-
-        const NEW_ADMIN_ADDR: &str = "newadmin";
-
-        let info = mock_info("creator", &coins(2, "token"));
-
+        // invalid denom prefix
         let full_denom_name: &str =
             &format!("{}/{}/{}", "invalid", MOCK_CONTRACT_ADDR, DENOM_NAME)[..];
 
@@ -452,7 +439,7 @@ mod tests {
             denom: String::from(full_denom_name),
             new_admin_address: String::from(NEW_ADMIN_ADDR),
         };
-        let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
+        let err = execute(deps.as_mut(), mock_env(), info.clone(), msg).unwrap_err();
 
         let expected_error = TokenFactoryError::InvalidDenom {
             denom: String::from(full_denom_name),
@@ -512,29 +499,134 @@ mod tests {
         }
     }
 
+
+    #[test]
+    fn msg_mint_tokens_success() {
+        let mut deps = mock_dependencies();
+
+        const NEW_ADMIN_ADDR: &str = "newadmin";
+        let mint_amount = Uint128::new(100 as u128);
+        let full_denom_name: &str =
+        &format!("{}/{}/{}", DENOM_PREFIX, MOCK_CONTRACT_ADDR, DENOM_NAME)[..];
+
+
+        let info = mock_info("creator", &coins(2, "token"));
+
+        let msg = ExecuteMsg::MintTokens {denom: String::from(full_denom_name), amount: mint_amount, mint_to_address: String::from(NEW_ADMIN_ADDR)};
+        let res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
+
+        assert_eq!(1, res.messages.len());
+
+        let expected_message = CosmosMsg::from(OsmosisMsg::MintTokens {
+            denom: String::from(full_denom_name),
+            amount: mint_amount,
+            mint_to_address: String::from(NEW_ADMIN_ADDR),
+        });
+        let actual_message = res.messages.get(0).unwrap();
+        assert_eq!(expected_message, actual_message.msg);
+
+        assert_eq!(1, res.attributes.len());
+
+        let expected_attribute = Attribute::new("method", "mint_tokens");
+        let actual_attribute = res.attributes.get(0).unwrap();
+        assert_eq!(expected_attribute, actual_attribute);
+        
+        assert_eq!(res.data.ok_or(0), Err(0));
+    }
+
+    #[test]
+    fn msg_mint_invalid_denom() {
+        let mut deps = mock_dependencies();
+
+        let full_denom_name: &str = &format!(
+            "{}/{}/{}/invalid",
+            DENOM_PREFIX, MOCK_CONTRACT_ADDR, DENOM_NAME
+        )[..];
+        const NEW_ADMIN_ADDR: &str = "newadmin";
+        let mint_amount = Uint128::new(100 as u128);
+
+        let info = mock_info("creator", &coins(2, "token"));
+
+        let msg = ExecuteMsg::MintTokens {denom: String::from(full_denom_name), amount: mint_amount, mint_to_address: String::from(NEW_ADMIN_ADDR)};
+        let err = execute(deps.as_mut(), mock_env(), info.clone(), msg).unwrap_err();
+        let expected_error = TokenFactoryError::InvalidDenom {
+            denom: String::from(full_denom_name),
+            message: String::from("denom must have 3 parts separated by /, had 4"),
+        };
+
+        assert_eq!(expected_error, err);
+
+        let full_denom_name: &str = &format!("{}/{}", DENOM_PREFIX, MOCK_CONTRACT_ADDR)[..];
+        let msg = ExecuteMsg::MintTokens {denom: String::from(full_denom_name), amount: mint_amount, mint_to_address: String::from(NEW_ADMIN_ADDR)};
+        let err = execute(deps.as_mut(), mock_env(), info.clone(), msg).unwrap_err();
+        let expected_error = TokenFactoryError::InvalidDenom {
+            denom: String::from(full_denom_name),
+            message: String::from("denom must have 3 parts separated by /, had 2"),
+        };
+
+        assert_eq!(expected_error, err);
+
+        let full_denom_name: &str =
+        &format!("{}/{}/{}", "invalid", MOCK_CONTRACT_ADDR, DENOM_NAME)[..];
+        let msg = ExecuteMsg::MintTokens {denom: String::from(full_denom_name), amount: mint_amount, mint_to_address: String::from(NEW_ADMIN_ADDR)};
+        let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
+        let expected_error = TokenFactoryError::InvalidDenom {
+            denom: String::from(full_denom_name),
+            message: String::from("prefix must be 'factory', was invalid"),
+        };
+
+        assert_eq!(expected_error, err)
+    }
+
     #[test]
     fn msg_burn_tokens_success() {
-        // let mut deps = mock_dependencies(&[]);
+        let mut deps = mock_dependencies();
 
-        // const NEW_ADMIN_ADDR: &str = "newadmin";
+        let mint_amount = Uint128::new(100 as u128);
+        let full_denom_name: &str =
+        &format!("{}/{}/{}", DENOM_PREFIX, MOCK_CONTRACT_ADDR, DENOM_NAME)[..];
 
-        // let info = mock_info("creator", &coins(2, "token"));
+        let info = mock_info("creator", &coins(2, "token"));
 
-        // let msg = ExecuteMsg::BurnTokens { denom: String::from(DENOM_NAME), new_admin_address: String::from(NEW_ADMIN_ADDR) };
-        // let res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
+        let msg = ExecuteMsg::BurnTokens { denom: String::from(full_denom_name), burn_from_address: String::from(""), amount: mint_amount };
+        let res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
 
-        // assert_eq!(1, res.messages.len());
+        assert_eq!(1, res.messages.len());
+        let expected_message = CosmosMsg::from(OsmosisMsg::BurnTokens {
+            denom: String::from(full_denom_name),
+            amount: mint_amount,
+            burn_from_address: String::from(""),
+        });
+        let actual_message = res.messages.get(0).unwrap();
+        assert_eq!(expected_message, actual_message.msg);
 
-        // let expected_message = CosmosMsg::from(OsmosisMsg::ChangeAdmin{ denom: String::from(DENOM_NAME), new_admin_address: String::from(NEW_ADMIN_ADDR) });
-        // let actual_message = res.messages.get(0).unwrap();
-        // assert_eq!(expected_message, actual_message.msg);
+        assert_eq!(1, res.attributes.len());
 
-        // assert_eq!(1, res.attributes.len());
+        let expected_attribute = Attribute::new("method", "burn_tokens");
+        let actual_attribute = res.attributes.get(0).unwrap();
+        assert_eq!(expected_attribute, actual_attribute);
+        
+        assert_eq!(res.data.ok_or(0), Err(0))
+    }
 
-        // let expected_attribute = Attribute::new("method", "change_admin");
-        // let actual_attribute = res.attributes.get(0).unwrap();
-        // assert_eq!(expected_attribute, actual_attribute);
+    #[test]
+    fn msg_burn_tokens_input_adddress() {
+        let mut deps = mock_dependencies();
 
-        // assert_eq!(res.data.ok_or(0), Err(0));
+        const NEW_ADMIN_ADDR: &str = "newadmin";
+        let mint_amount = Uint128::new(100 as u128);
+        let full_denom_name: &str =
+        &format!("{}/{}/{}", DENOM_PREFIX, MOCK_CONTRACT_ADDR, DENOM_NAME)[..];
+
+        let info = mock_info("creator", &coins(2, "token"));
+
+        let msg = ExecuteMsg::BurnTokens { denom: String::from(full_denom_name), burn_from_address: String::from(NEW_ADMIN_ADDR), amount: mint_amount };
+        let err = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
+
+        let expected_error = TokenFactoryError::AddressNotSupported{
+            address: String::from(NEW_ADMIN_ADDR),
+        };
+
+        assert_eq!(expected_error, err)
     }
 }
