@@ -139,15 +139,18 @@ not supported. If you attempt to burn from another address that
 has a custom denom minted to but is not "" (empty string), you will get an error:
 
 ```sh
-osmosisd tx wasm execute $CONTRACT_ADDR "{ \"burn_tokens\": {\"amount\": \"50\", \"denom\": \"factory/${CONTRACT_ADDR}/mydenom\", \"burn_from_address\": \"$TEST2_ADDR\"}}" --from test1 -b block
+osmosisd tx wasm execute $CONTRACT_ADDR "{ \"burn_tokens\": {\"amount\": \"50\", \"denom\": \"factory/${CONTRACT_ADDR}/mydenom\", \"burn_from_address\": \"$CONTRACT_ADDR\"}}" --from test1 -b block
 
 # You will see the following:
 # raw_log: 'failed to execute message; message index: 0: address is not supported yet,
 ```
 
-As a result, `Burn Tokens` can only be tested if you "pre-mint" the denom to the
-`$CONTRACT_ADDR` and then attempt to burn it from "" (empty string)
+As a result, `Burn Tokens` be tested in the following ways:
+- "pre-mint" the custom denom to the `$CONTRACT_ADDR` and then attempt to burn it from "" (empty string)
 "burn_from_address"
+- change admin to the address that has the custom denom minted to
+
+Next, we will use the first "pre-mint" approach
 
 ```sh
 # Pre-mint 100 of custom denom to $CONTRACT_ADDR
@@ -161,6 +164,20 @@ osmosisd q bank total --denom factory/$CONTRACT_ADDR/mydenom
 # You should see this in the list:
 # - amount: "50"
 #   denom: factory/osmo14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9sq2r9
+```
+
+- `Change Admin` executing from test1, changing from `$CONTRACT_ADDR` to $TEST2
+
+```sh
+TEST2_ADDR=osmo18s5lynnmx37hq4wlrw9gdn68sg2uxp5rgk26vv # This is from the result of "Download and Install LocalOsmosis" section
+
+# Change Admin
+osmosisd tx wasm execute $CONTRACT_ADDR "{ \"change_admin\": {\"denom\": \"factory/${CONTRACT_ADDR}/mydenom\", \"new_admin_address\": \"${TEST2_ADDR}\"}}" --from test1 -b block
+
+# Verify New Admin
+osmosisd q tokenfactory denom-authority-metadata factory/${CONTRACT_ADDR}/mydenom
+# You should be able to see the following:
+# osmosisd q tokenfactory denom-authority-metadata factory/${CONTRACT_ADDR}/mydenom
 ```
 
 Other messages can be executed similarly.
