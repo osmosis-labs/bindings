@@ -249,6 +249,37 @@ impl Pool {
         }
     }
 
+    pub fn exit_swap_exact_amount_in(
+        mut self,
+        _share_in_amount: Uint128,
+        token_out_min_amount: Uint128,
+        token_out_denom: String,
+        pool_id: u64,
+    ) -> PoolStateResponse {
+        let withdraw_asset_bal = self.get_amount(&token_out_denom);
+        let new_denom_bal = withdraw_asset_bal.unwrap() - token_out_min_amount;
+        self.set_amount(&token_out_denom, new_denom_bal).unwrap();
+
+        let other_pool_asset_balance: Vec<Uint128> = self
+            .assets
+            .clone()
+            .into_iter()
+            .filter(|x| x.denom != token_out_denom)
+            .map(|x| x.amount)
+            .collect();
+
+        self.shares = (new_denom_bal * other_pool_asset_balance[0]).isqrt();
+
+        let denom = self.gamm_denom(pool_id);
+        PoolStateResponse {
+            assets: self.assets,
+            shares: Coin {
+                denom,
+                amount: self.shares,
+            },
+        }
+    }
+
     pub fn gamm_denom(&self, pool_id: u64) -> String {
         // see https://github.com/osmosis-labs/osmosis/blob/e13cddc698a121dce2f8919b2a0f6a743f4082d6/x/gamm/types/key.go#L52-L54
         format!("gamm/pool/{}", pool_id)
@@ -557,6 +588,38 @@ impl Module for OsmosisModule {
                     events: vec![],
                 })
             }
+            OsmosisMsg::ExitSwapShareAmountIn {
+                pool_id,
+                share_in_amount,
+                token_out_min_amount,
+                token_out_denom,
+            } => {
+                let pool = POOLS.load(storage, pool_id)?;
+
+                let res = pool.clone().exit_swap_exact_amount_in(
+                    share_in_amount,
+                    token_out_min_amount,
+                    token_out_denom,
+                    pool_id,
+                );
+
+                let data = Some(to_binary(&res)?);
+
+                POOLS.save(
+                    storage,
+                    pool_id,
+                    &Pool {
+                        assets: res.assets,
+                        shares: res.shares.amount,
+                        fee: pool.fee,
+                    },
+                )?;
+
+                Ok(AppResponse {
+                    data,
+                    events: vec![],
+                })
+            }
         }
     }
 
@@ -711,7 +774,7 @@ impl OsmosisApp {
 mod tests {
     use super::*;
     use cosmwasm_std::testing::MOCK_CONTRACT_ADDR;
-    use cosmwasm_std::{coin, from_slice, Uint128};
+    use cosmwasm_std::{coin, from_binary, from_slice, Uint128};
     use cw_multi_test::Executor;
     use osmo_bindings::{Step, Swap};
 
@@ -1142,6 +1205,254 @@ mod tests {
         let state: PoolStateResponse = app.wrap().query(&query).unwrap();
         let expected_assets = vec![coin(2_000_000 + 1993, "atom"), coin(1_000_000 - 993, "btc")];
         assert_eq!(state.assets, expected_assets);
+    }
+
+    #[test]
+    fn perform_join_pool_no_swap() {
+        let pool1 = Pool::new(coin(12_000_000, "uosmo"), coin(240_000_000, "uatom"));
+        let provider = Addr::unchecked("provider");
+
+        // set up pools
+        let mut app = OsmosisApp::new();
+        app.init_modules(|router, _, storage| {
+            router.custom.set_pool(storage, 1, &pool1).unwrap();
+            router
+                .bank
+                .init_balance(
+                    storage,
+                    &provider,
+                    vec![coin(12_000, "uosmo"), coin(240_000, "uatom")],
+                )
+                .unwrap()
+        });
+
+        let query = OsmosisQuery::PoolState { id: 1 }.into();
+        let state: PoolStateResponse = app.wrap().query(&query).unwrap();
+        assert_eq!(
+            state,
+            PoolStateResponse {
+                shares: Coin {
+                    denom: "gamm/pool/1".to_string(),
+                    amount: Uint128::new(53665631)
+                },
+                assets: vec![coin(12000000u128, "uosmo"), coin(240000000u128, "uatom")]
+            }
+        );
+
+        let msg = OsmosisMsg::JoinPoolNoSwap {
+            pool_id: 1,
+            share_out_amount: Uint128::new(53666),
+            token_in_maxs: vec![coin(12_000, "uosmo"), coin(240_000, "uatom")],
+        };
+
+        let res = app.execute(provider.clone(), msg.into()).unwrap();
+
+        assert_eq!(
+            from_binary::<PoolStateResponse>(&res.data.unwrap()).unwrap(),
+            PoolStateResponse {
+                shares: Coin {
+                    denom: "gamm/pool/1".to_string(),
+                    amount: Uint128::new(53719297)
+                },
+                assets: vec![coin(12012000u128, "uosmo"), coin(240240000u128, "uatom")]
+            }
+        );
+    }
+    #[test]
+    fn perform_exit_pool() {
+        let pool1 = Pool::new(coin(12_000_000, "uosmo"), coin(240_000_000, "uatom"));
+        let provider = Addr::unchecked("provider");
+
+        // set up pools
+        let mut app = OsmosisApp::new();
+        app.init_modules(|router, _, storage| {
+            router.custom.set_pool(storage, 1, &pool1).unwrap();
+            router
+                .bank
+                .init_balance(
+                    storage,
+                    &provider,
+                    vec![coin(12_000, "uosmo"), coin(240_000, "uatom")],
+                )
+                .unwrap()
+        });
+
+        let query = OsmosisQuery::PoolState { id: 1 }.into();
+        let state: PoolStateResponse = app.wrap().query(&query).unwrap();
+        assert_eq!(
+            state,
+            PoolStateResponse {
+                shares: Coin {
+                    denom: "gamm/pool/1".to_string(),
+                    amount: Uint128::new(53665631)
+                },
+                assets: vec![coin(12000000u128, "uosmo"), coin(240000000u128, "uatom")]
+            }
+        );
+
+        let msg = OsmosisMsg::JoinPoolNoSwap {
+            pool_id: 1,
+            share_out_amount: Uint128::new(53666),
+            token_in_maxs: vec![coin(12_000, "uosmo"), coin(240_000, "uatom")],
+        };
+
+        let res = app.execute(provider.clone(), msg.into()).unwrap();
+
+        assert_eq!(
+            from_binary::<PoolStateResponse>(&res.data.unwrap()).unwrap(),
+            PoolStateResponse {
+                shares: Coin {
+                    denom: "gamm/pool/1".to_string(),
+                    amount: Uint128::new(53719297)
+                },
+                assets: vec![coin(12012000u128, "uosmo"), coin(240240000u128, "uatom")]
+            }
+        );
+
+        let msg = OsmosisMsg::ExitPool {
+            pool_id: 1,
+            share_in_amount: Uint128::new(53666),
+            token_out_mins: vec![coin(12_000, "uosmo"), coin(240_000, "uatom")],
+        };
+
+        let res = app.execute(provider.clone(), msg.into()).unwrap();
+
+        assert_eq!(
+            from_binary::<PoolStateResponse>(&res.data.unwrap()).unwrap(),
+            PoolStateResponse {
+                shares: Coin {
+                    denom: "gamm/pool/1".to_string(),
+                    amount: Uint128::new(53665631)
+                },
+                assets: vec![coin(12000000u128, "uosmo"), coin(240000000u128, "uatom")]
+            }
+        );
+    }
+
+    #[test]
+    fn perform_join_swap_exact_amount_in() {
+        let pool1 = Pool::new(coin(12_000_000, "uosmo"), coin(240_000_000, "uatom"));
+        let provider = Addr::unchecked("provider");
+
+        // set up pools
+        let mut app = OsmosisApp::new();
+        app.init_modules(|router, _, storage| {
+            router.custom.set_pool(storage, 1, &pool1).unwrap();
+            router
+                .bank
+                .init_balance(
+                    storage,
+                    &provider,
+                    vec![coin(12_000, "uosmo"), coin(240_000, "uatom")],
+                )
+                .unwrap()
+        });
+        let denom = pool1.gamm_denom(1);
+
+        let query = OsmosisQuery::PoolState { id: 1 }.into();
+        let state: PoolStateResponse = app.wrap().query(&query).unwrap();
+        assert_eq!(
+            state,
+            PoolStateResponse {
+                shares: Coin {
+                    denom: denom.to_string(),
+                    amount: Uint128::new(53665631)
+                },
+                assets: vec![coin(12000000u128, "uosmo"), coin(240000000u128, "uatom")]
+            }
+        );
+
+        let msg = OsmosisMsg::JoinSwapExactAmountIn {
+            pool_id: 1,
+            share_out_min_amount: Uint128::new(53666),
+            token_in: coin(12_000, "uosmo"),
+        };
+
+        let res = app.execute(provider.clone(), msg.into()).unwrap();
+
+        assert_eq!(
+            from_binary::<PoolStateResponse>(&res.data.unwrap()).unwrap(),
+            PoolStateResponse {
+                shares: Coin {
+                    denom: denom,
+                    amount: Uint128::new(53692457)
+                },
+                assets: vec![coin(12012000u128, "uosmo"), coin(240000000u128, "uatom")]
+            }
+        );
+    }
+
+    #[test]
+    fn perform_exit_swap_share_amount_in() {
+        let pool1 = Pool::new(coin(12_000_000, "uosmo"), coin(240_000_000, "uatom"));
+        let provider = Addr::unchecked("provider");
+
+        // set up pools
+        let mut app = OsmosisApp::new();
+        app.init_modules(|router, _, storage| {
+            router.custom.set_pool(storage, 1, &pool1).unwrap();
+            router
+                .bank
+                .init_balance(
+                    storage,
+                    &provider,
+                    vec![coin(12_000, "uosmo"), coin(240_000, "uatom")],
+                )
+                .unwrap()
+        });
+        let denom = pool1.gamm_denom(1);
+
+        let query = OsmosisQuery::PoolState { id: 1 }.into();
+        let state: PoolStateResponse = app.wrap().query(&query).unwrap();
+        assert_eq!(
+            state,
+            PoolStateResponse {
+                shares: Coin {
+                    denom: denom.to_string(),
+                    amount: Uint128::new(53665631)
+                },
+                assets: vec![coin(12000000u128, "uosmo"), coin(240000000u128, "uatom")]
+            }
+        );
+
+        let msg = OsmosisMsg::JoinSwapExactAmountIn {
+            pool_id: 1,
+            share_out_min_amount: Uint128::new(53666),
+            token_in: coin(12_000, "uosmo"),
+        };
+
+        let res = app.execute(provider.clone(), msg.into()).unwrap();
+
+        assert_eq!(
+            from_binary::<PoolStateResponse>(&res.data.unwrap()).unwrap(),
+            PoolStateResponse {
+                shares: Coin {
+                    denom: denom.clone(),
+                    amount: Uint128::new(53692457)
+                },
+                assets: vec![coin(12012000u128, "uosmo"), coin(240000000u128, "uatom")]
+            }
+        );
+
+        let msg = OsmosisMsg::ExitSwapShareAmountIn {
+            pool_id: 1,
+            share_in_amount: Uint128::new(53666),
+            token_out_min_amount: Uint128::new(12_000),
+            token_out_denom: "uosmo".to_string(),
+        };
+
+        let res = app.execute(provider.clone(), msg.into()).unwrap();
+
+        assert_eq!(
+            from_binary::<PoolStateResponse>(&res.data.unwrap()).unwrap(),
+            PoolStateResponse {
+                shares: Coin {
+                    denom: denom,
+                    amount: Uint128::new(53665631)
+                },
+                assets: vec![coin(12000000u128, "uosmo"), coin(240000000u128, "uatom")]
+            }
+        );
     }
 
     // TODO: make the following test work
