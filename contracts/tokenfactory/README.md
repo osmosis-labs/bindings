@@ -31,6 +31,8 @@ There are 4 messages:
 Please follow [this guide](https://docs.osmosis.zone/developing/dapps/get_started/cosmwasm-localosmosis.html#setup-localosmosis)
 up and until and including ["Created a local key" section](https://docs.osmosis.zone/developing/dapps/get_started/cosmwasm-localosmosis.html#optimized-compilation)
 
+- Make sure to create [2 accounts](https://github.com/osmosis-labs/cosmos-sdk/blob/83cb447d528595261b3220c658e5dc1f4b0df8fe/x/distribution/types/distribution.pb.go#L568) on the keyring - `test1` and `test2`
+
 ### Building
 
 N.B.: All following example shell scripts assume executing them from the project root.
@@ -55,7 +57,7 @@ sudo docker run --rm -v "$(pwd)":/code   --mount type=volume,source="$(basename 
 cd artifacts
 
 # Upload and store transaction hash in TX environment variable.
-TX=$(osmosisd tx wasm store tokenfactory.wasm  --from <unsafe-test-key-name> --chain-id=localosmosis --gas-prices 0.1uosmo --gas auto --gas-adjustment 1.3 -b block --output json -y | jq -r '.txhash')
+TX=$(osmosisd tx wasm store tokenfactory.wasm  --from test1 --chain-id=localosmosis --gas-prices 0.1uosmo --gas auto --gas-adjustment 1.3 -b block --output json -y | jq -r '.txhash')
 CODE_ID=$(osmosisd query tx $TX --output json | jq -r '.logs[0].events[-1].attributes[0].value')
 echo "Your contract code_id is $CODE_ID"
 ```
@@ -63,7 +65,7 @@ echo "Your contract code_id is $CODE_ID"
 #### Instantiate the Contact
 ```sh
 # Instantiate
-osmosisd tx wasm instantiate $CODE_ID "{}" --amount 50000uosmo  --label "Token Factory Contract" --from <unsafe-test-key-name> --chain-id localosmosis --gas-prices 0.1uosmo --gas auto --gas-adjustment 1.3 -b block -y --no-admin
+osmosisd tx wasm instantiate $CODE_ID "{}" --amount 50000uosmo  --label "Token Factory Contract" --from test1 --chain-id localosmosis --gas-prices 0.1uosmo --gas auto --gas-adjustment 1.3 -b block -y --no-admin
 
 # Get contract address.
 CONTRACT_ADDR=$(osmosisd query wasm list-contract-by-code $CODE_ID --output json | jq -r '.contracts[0]')
@@ -108,7 +110,20 @@ For example, here is the schema for `CreateDenom` message:
 
 - `Create Denom`
 ```sh
-osmosisd tx wasm execute $CONTRACT_ADDR '{ "subdenom": "mydenom" }' --from test1
+osmosisd tx wasm execute $CONTRACT_ADDR '{ "create_denom": { "subdenom": "mydenom" } }' --from test1
+
+# If you do this
+osmosisd q bank total --denom factory/$CONTRACT_ADDR/mydenom
+# You should see this:
+# amount: "0"
+#denom: factory/osmo1wug8sewp6cedgkmrmvhl3lf3tulagm9hnvy8p0rppz9yjw0g4wtqcm3670/mydenom
+```
+
+- `Mint Tokens` from test1 to test2
+```sh
+TEST2_ADDR=osmo18s5lynnmx37hq4wlrw9gdn68sg2uxp5rgk26vv # This is from the result of "Download and Install LocalOsmosis" section
+
+osmosisd tx wasm execute $CONTRACT_ADDR "{ \"mint_tokens\": {\"amount\": \"100\", \"denom\": \"factory/${CONTRACT_ADDR}/mydenom\", \"mint_to_address\": \"$TEST2_ADDR\"}}" --from test1
 ```
 
 Other messages can be executed similarly.
