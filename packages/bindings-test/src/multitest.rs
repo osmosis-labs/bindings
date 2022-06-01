@@ -152,6 +152,102 @@ impl Pool {
             }
         }
     }
+    pub fn join_pool_no_swap(
+        mut self,
+        asset1: &Coin,
+        asset2: &Coin,
+        pool_id: u64,
+        _share_out_amount: Uint128,
+    ) -> PoolStateResponse {
+        let asset1_denom = &asset1.denom;
+        let asset2_denom = &asset2.denom;
+        let asset1_deposit = asset1.amount;
+        let asset2_deposit = asset2.amount;
+        let (denom1_bal, denom2_bal) = (
+            self.get_amount(&asset1_denom.to_string()),
+            self.get_amount(&asset2_denom.to_string()),
+        );
+        let new_denom1_bal = denom1_bal.unwrap() + asset1_deposit;
+        let new_denom2_bal = denom2_bal.unwrap() + asset2_deposit;
+        self.set_amount(&asset1_denom.to_string(), new_denom1_bal)
+            .unwrap();
+        self.set_amount(&asset2_denom.to_string(), new_denom2_bal)
+            .unwrap();
+        self.shares = (new_denom1_bal * new_denom2_bal).isqrt();
+
+        let denom = self.gamm_denom(pool_id);
+        PoolStateResponse {
+            assets: self.assets,
+            shares: Coin {
+                denom,
+                amount: self.shares,
+            },
+        }
+    }
+
+    pub fn join_swap_exact_amount_in(
+        mut self,
+        token_in: &Coin,
+        pool_id: u64,
+        _share_out_min_amount: Uint128,
+    ) -> PoolStateResponse {
+        let deposit_asset_bal = self.get_amount(&token_in.denom);
+        let new_denom_bal = deposit_asset_bal.unwrap() + token_in.amount;
+        self.set_amount(&token_in.denom, new_denom_bal).unwrap();
+
+        let other_pool_asset_balance: Vec<Uint128> = self
+            .assets
+            .clone()
+            .into_iter()
+            .filter(|x| x.denom != token_in.denom)
+            .map(|x| x.amount)
+            .collect();
+
+        self.shares = (new_denom_bal * other_pool_asset_balance[0]).isqrt();
+
+        let denom = self.gamm_denom(pool_id);
+
+        PoolStateResponse {
+            assets: self.assets,
+            shares: Coin {
+                denom,
+                amount: self.shares,
+            },
+        }
+    }
+
+    pub fn exit_pool(
+        mut self,
+        asset1: &Coin,
+        asset2: &Coin,
+        pool_id: u64,
+        _share_in_amount: Uint128,
+    ) -> PoolStateResponse {
+        let asset1_denom = &asset1.denom;
+        let asset2_denom = &asset2.denom;
+        let asset1_withdrawal = asset1.amount;
+        let asset2_withdrawal = asset2.amount;
+        let (denom1_bal, denom2_bal) = (
+            self.get_amount(&asset1_denom.to_string()),
+            self.get_amount(&asset2_denom.to_string()),
+        );
+        let new_denom1_bal = denom1_bal.unwrap() - asset1_withdrawal;
+        let new_denom2_bal = denom2_bal.unwrap() - asset2_withdrawal;
+        self.set_amount(&asset1_denom.to_string(), new_denom1_bal)
+            .unwrap();
+        self.set_amount(&asset2_denom.to_string(), new_denom2_bal)
+            .unwrap();
+        self.shares = (new_denom1_bal * new_denom2_bal).isqrt();
+
+        let denom = self.gamm_denom(pool_id);
+        PoolStateResponse {
+            assets: self.assets,
+            shares: Coin {
+                denom,
+                amount: self.shares,
+            },
+        }
+    }
 
     pub fn gamm_denom(&self, pool_id: u64) -> String {
         // see https://github.com/osmosis-labs/osmosis/blob/e13cddc698a121dce2f8919b2a0f6a743f4082d6/x/gamm/types/key.go#L52-L54
@@ -366,6 +462,96 @@ impl Module for OsmosisModule {
                     SwapAmountWithLimit::ExactOut { .. } => SwapAmount::In(pay_in),
                 };
                 let data = Some(to_binary(&SwapResponse { amount: output })?);
+                Ok(AppResponse {
+                    data,
+                    events: vec![],
+                })
+            }
+            OsmosisMsg::JoinPoolNoSwap {
+                pool_id,
+                share_out_amount,
+                token_in_maxs,
+            } => {
+                let pool = POOLS.load(storage, pool_id)?;
+                let res = pool.clone().join_pool_no_swap(
+                    &token_in_maxs[0],
+                    &token_in_maxs[1],
+                    pool_id,
+                    share_out_amount,
+                );
+
+                let data = Some(to_binary(&res)?);
+
+                POOLS.save(
+                    storage,
+                    pool_id,
+                    &Pool {
+                        assets: res.assets,
+                        shares: res.shares.amount,
+                        fee: pool.fee,
+                    },
+                )?;
+
+                Ok(AppResponse {
+                    data,
+                    events: vec![],
+                })
+            }
+            OsmosisMsg::JoinSwapExactAmountIn {
+                pool_id,
+                share_out_min_amount,
+                token_in,
+            } => {
+                let pool = POOLS.load(storage, pool_id)?;
+                let res = pool.clone().join_swap_exact_amount_in(
+                    &token_in,
+                    pool_id,
+                    share_out_min_amount,
+                );
+
+                let data = Some(to_binary(&res)?);
+
+                POOLS.save(
+                    storage,
+                    pool_id,
+                    &Pool {
+                        assets: res.assets,
+                        shares: res.shares.amount,
+                        fee: pool.fee,
+                    },
+                )?;
+
+                Ok(AppResponse {
+                    data,
+                    events: vec![],
+                })
+            }
+            OsmosisMsg::ExitPool {
+                pool_id,
+                share_in_amount,
+                token_out_mins,
+            } => {
+                let pool = POOLS.load(storage, pool_id)?;
+
+                let res = pool.clone().exit_pool(
+                    &token_out_mins[0],
+                    &token_out_mins[1],
+                    pool_id,
+                    share_in_amount,
+                );
+
+                let data = Some(to_binary(&res)?);
+
+                POOLS.save(
+                    storage,
+                    pool_id,
+                    &Pool {
+                        assets: res.assets,
+                        shares: res.shares.amount,
+                        fee: pool.fee,
+                    },
+                )?;
+
                 Ok(AppResponse {
                     data,
                     events: vec![],
@@ -691,7 +877,6 @@ mod tests {
             },
         );
         let err = app.execute(trader.clone(), msg.into()).unwrap_err();
-        println!("{:?}", err);
 
         // now a proper swap
         let msg = OsmosisMsg::simple_swap(
