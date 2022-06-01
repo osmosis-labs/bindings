@@ -110,7 +110,7 @@ For example, here is the schema for `CreateDenom` message:
 
 - `Create Denom`
 ```sh
-osmosisd tx wasm execute $CONTRACT_ADDR '{ "create_denom": { "subdenom": "mydenom" } }' --from test1
+osmosisd tx wasm execute $CONTRACT_ADDR '{ "create_denom": { "subdenom": "mydenom" } }' --from test1 --amount 10000000uosmo -b block
 
 # If you do this
 osmosisd q bank total --denom factory/$CONTRACT_ADDR/mydenom
@@ -119,11 +119,48 @@ osmosisd q bank total --denom factory/$CONTRACT_ADDR/mydenom
 #denom: factory/osmo1wug8sewp6cedgkmrmvhl3lf3tulagm9hnvy8p0rppz9yjw0g4wtqcm3670/mydenom
 ```
 
-- `Mint Tokens` from test1 to test2
+- `Mint Tokens` executing from test1, minting to test2
 ```sh
 TEST2_ADDR=osmo18s5lynnmx37hq4wlrw9gdn68sg2uxp5rgk26vv # This is from the result of "Download and Install LocalOsmosis" section
 
-osmosisd tx wasm execute $CONTRACT_ADDR "{ \"mint_tokens\": {\"amount\": \"100\", \"denom\": \"factory/${CONTRACT_ADDR}/mydenom\", \"mint_to_address\": \"$TEST2_ADDR\"}}" --from test1
+osmosisd tx wasm execute $CONTRACT_ADDR "{ \"mint_tokens\": {\"amount\": \"100\", \"denom\": \"factory/${CONTRACT_ADDR}/mydenom\", \"mint_to_address\": \"$TEST2_ADDR\"}}" --from test1 -b block
+
+# If you do this
+osmosisd q bank total --denom factory/$CONTRACT_ADDR/mydenom
+# You should see this in the list:
+# - amount: "100"
+#   denom: factory/osmo14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9sq2r9
+```
+
+- `Burn Tokens` executing from test1, minting from test2
+
+Currently, burning from an address other than "" which refers to `$CONTRACT_ADDR` is
+not supported. If you attempt to burn from another address that
+has a custom denom minted to but is not "" (empty string), you will get an error:
+
+```sh
+osmosisd tx wasm execute $CONTRACT_ADDR "{ \"burn_tokens\": {\"amount\": \"50\", \"denom\": \"factory/${CONTRACT_ADDR}/mydenom\", \"burn_from_address\": \"$TEST2_ADDR\"}}" --from test1 -b block
+
+# You will see the following:
+# raw_log: 'failed to execute message; message index: 0: address is not supported yet,
+```
+
+As a result, `Burn Tokens` can only be tested if you "pre-mint" the denom to the
+`$CONTRACT_ADDR` and then attempt to burn it from "" (empty string)
+"burn_from_address"
+
+```sh
+# Pre-mint 100 of custom denom to $CONTRACT_ADDR
+osmosisd tx wasm execute $CONTRACT_ADDR "{ \"mint_tokens\": {\"amount\": \"100\", \"denom\": \"factory/${CONTRACT_ADDR}/mydenom\", \"mint_to_address\": \"$CONTRACT_ADDR\"}}" --from test1 -b block
+
+# Try to burn 50
+osmosisd tx wasm execute $CONTRACT_ADDR "{ \"burn_tokens\": {\"amount\": \"50\", \"denom\": \"factory/${CONTRACT_ADDR}/mydenom\", \"burn_from_address\": \"\"}}" --from test1 -b block
+
+# If you do this
+osmosisd q bank total --denom factory/$CONTRACT_ADDR/mydenom
+# You should see this in the list:
+# - amount: "50"
+#   denom: factory/osmo14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9sq2r9
 ```
 
 Other messages can be executed similarly.
