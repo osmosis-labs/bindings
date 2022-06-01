@@ -180,8 +180,6 @@ osmosisd q tokenfactory denom-authority-metadata factory/${CONTRACT_ADDR}/mydeno
 # osmosisd q tokenfactory denom-authority-metadata factory/${CONTRACT_ADDR}/mydenom
 ```
 
-Other messages can be executed similarly.
-
 ##### Queries
 
 - `Get Denom`
