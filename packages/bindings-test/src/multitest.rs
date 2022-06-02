@@ -407,6 +407,9 @@ impl Module for OsmosisModule {
                 let res = FullDenomResponse { denom };
                 Ok(to_binary(&res)?)
             }
+            OsmosisQuery::DenomAdmin { subdenom } => {
+                todo!()
+            }
             OsmosisQuery::PoolState { id } => {
                 let pool = POOLS.load(storage, id)?;
                 let res = pool.into_response(id);
