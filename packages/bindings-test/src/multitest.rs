@@ -21,8 +21,8 @@ use cw_storage_plus::Map;
 
 use crate::error::ContractError;
 use osmo_bindings::{
-    FullDenomResponse, OsmosisMsg, OsmosisQuery, PoolStateResponse, SpotPriceResponse, Step, Swap,
-    SwapAmount, SwapAmountWithLimit, SwapResponse,
+    DenomAdminResponse, FullDenomResponse, OsmosisMsg, OsmosisQuery, PoolStateResponse,
+    SpotPriceResponse, Step, Swap, SwapAmount, SwapAmountWithLimit, SwapResponse,
 };
 
 pub const POOLS: Map<u64, Pool> = Map::new("pools");
