@@ -33,6 +33,8 @@ pub enum OsmosisQuery {
         route: Vec<Step>,
         amount: SwapAmount,
     },
+    /// Returns the admin of a denom, if the denom is a Token Factory denom.
+    DenomAdmin { subdenom: String },
 }
 
 impl CustomQuery for OsmosisQuery {}
@@ -66,6 +68,11 @@ impl OsmosisQuery {
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 pub struct FullDenomResponse {
     pub denom: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct DenomAdminResponse {
+    pub admin: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]

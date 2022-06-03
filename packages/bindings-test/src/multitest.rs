@@ -21,8 +21,8 @@ use cw_storage_plus::Map;
 
 use crate::error::ContractError;
 use osmo_bindings::{
-    FullDenomResponse, OsmosisMsg, OsmosisQuery, PoolStateResponse, SpotPriceResponse, Step, Swap,
-    SwapAmount, SwapAmountWithLimit, SwapResponse,
+    DenomAdminResponse, FullDenomResponse, OsmosisMsg, OsmosisQuery, PoolStateResponse,
+    SpotPriceResponse, Step, Swap, SwapAmount, SwapAmountWithLimit, SwapResponse,
 };
 
 pub const POOLS: Map<u64, Pool> = Map::new("pools");
@@ -406,6 +406,9 @@ impl Module for OsmosisModule {
                 let denom = self.build_denom(&contract, &subdenom)?;
                 let res = FullDenomResponse { denom };
                 Ok(to_binary(&res)?)
+            }
+            OsmosisQuery::DenomAdmin { subdenom } => {
+                todo!()
             }
             OsmosisQuery::PoolState { id } => {
                 let pool = POOLS.load(storage, id)?;

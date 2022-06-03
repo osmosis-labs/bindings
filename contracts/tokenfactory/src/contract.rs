@@ -6,7 +6,7 @@ use cosmwasm_std::{
 use cw2::set_contract_version;
 
 use crate::error::TokenFactoryError;
-use crate::msg::{ExecuteMsg, GetDenomResponse, InstantiateMsg, QueryMsg};
+use crate::msg::{DenomAdminResponse, ExecuteMsg, GetDenomResponse, InstantiateMsg, QueryMsg};
 use crate::state::{State, STATE};
 use osmo_bindings::{OsmosisMsg, OsmosisQuerier, OsmosisQuery};
 
@@ -150,6 +150,7 @@ pub fn query(deps: Deps<OsmosisQuery>, _env: Env, msg: QueryMsg) -> StdResult<Bi
             creator_address,
             subdenom,
         } => to_binary(&get_denom(deps, creator_address, subdenom)),
+        QueryMsg::DenomAdmin { subdenom } => to_binary(&denom_admin(deps, subdenom)),
     }
 }
 
@@ -159,6 +160,15 @@ fn get_denom(deps: Deps<OsmosisQuery>, creator_addr: String, subdenom: String) -
 
     GetDenomResponse {
         denom: response.denom,
+    }
+}
+
+fn denom_admin(deps: Deps<OsmosisQuery>, subdenom: String) -> DenomAdminResponse {
+    let querier = OsmosisQuerier::new(&deps.querier);
+    let response = querier.denom_admin(subdenom).unwrap();
+
+    DenomAdminResponse {
+        admin: response.admin,
     }
 }
 
