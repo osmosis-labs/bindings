@@ -1,6 +1,6 @@
 use cosmwasm_std::{QuerierWrapper, QueryRequest, StdResult};
 
-use crate::query::{FullDenomResponse, OsmosisQuery};
+use crate::query::{DenomAdminResponse, FullDenomResponse, OsmosisQuery};
 
 /// This is a helper wrapper to easily use our custom queries
 pub struct OsmosisQuerier<'a> {
@@ -22,6 +22,12 @@ impl<'a> OsmosisQuerier<'a> {
             subdenom,
         };
         let request: QueryRequest<OsmosisQuery> = OsmosisQuery::into(full_denom_query);
+        self.querier.query(&request)
+    }
+
+    pub fn denom_admin(&self, subdenom: String) -> StdResult<DenomAdminResponse> {
+        let denom_admin_query = OsmosisQuery::DenomAdmin { subdenom };
+        let request: QueryRequest<OsmosisQuery> = OsmosisQuery::into(denom_admin_query);
         self.querier.query(&request)
     }
 }
