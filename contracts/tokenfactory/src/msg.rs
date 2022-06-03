@@ -35,10 +35,18 @@ pub enum QueryMsg {
         creator_address: String,
         subdenom: String,
     },
+    DenomAdmin {
+        subdenom: String,
+    },
 }
 
 // We define a custom struct for each query response
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct GetDenomResponse {
     pub denom: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct DenomAdminResponse {
+    pub admin: String,
 }
