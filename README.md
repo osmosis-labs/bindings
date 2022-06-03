@@ -82,7 +82,7 @@ to run it is this:
 docker run --rm -v "$(pwd)":/code \
   --mount type=volume,source="$(basename "$(pwd)")_cache",target=/code/target \
   --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
-  cosmwasm/rust-optimizer:0.12.4
+  cosmwasm/workspace-optimizer:0.12.6
 ```
 
 Or, If you're on an arm64 machine, you should use a docker image built with arm64.
@@ -90,7 +90,7 @@ Or, If you're on an arm64 machine, you should use a docker image built with arm6
 docker run --rm -v "$(pwd)":/code \
   --mount type=volume,source="$(basename "$(pwd)")_cache",target=/code/target \
   --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
-  cosmwasm/rust-optimizer-arm64:0.12.4
+  cosmwasm/workspace-optimizer-arm64:0.12.6
 ```
 
 We must mount the contract code to `/code`. You can use a absolute path instead
@@ -112,7 +112,7 @@ It is also stripped and minimized for upload to a blockchain (we will also
 gzip it in the uploading process to make it even smaller).
 
 
-## Writing contracts that interact with Osmosis 
+## Writing contracts that interact with Osmosis
 
 ### Choosing a network
 
@@ -132,7 +132,7 @@ parametrize Cosmwasm types:
 
  * `OsmosisQuery`, which implements `CustomQuery`
  * `OsmosisMsg`, which implement `CosmosMsg`
- 
+
  Specifically, any function that uses `Deps` or `DepsMut` and needs to interact
  with the chain will need to parametrize them as `Deps<OsmosisQuery>` and
  `DepsMut<OsmosisQuery>`, and any `Response` that adds messages or submessages
@@ -174,7 +174,7 @@ implementation would assume an `Empty` custom query,
 To execute osmosis transactions as part of your contract's execute response. You
 can create create the `OsmosisMsg` and provide it as part of your contract's response.
 
-Here is an example of how to execute a swap as part of the 
+Here is an example of how to execute a swap as part of the
 
 See the Cosmwasm documentation on
 [submessages](https://github.com/CosmWasm/cosmwasm/blob/main/SEMANTICS.md#dispatching-messages)
@@ -214,12 +214,12 @@ probably a good idea.
 For more information on the parameters of the `OsmosisMsg` used above, see the
 Osmosis Cosmwasm API documentation (TBD).
 
-# Executing custom transactions 
+# Executing custom transactions
 
 If the transaction you want to execute is not provided by this API, you can
 still execute it using `CustomMsg`.
 
-ToDo: Add an example. 
+ToDo: Add an example.
 
 ## Writing integration tests that mock the Osmosis responses
 
