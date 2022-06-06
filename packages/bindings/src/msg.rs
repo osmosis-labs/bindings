@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::types::SwapAmountWithLimit;
 use crate::{Step, Swap};
-use cosmwasm_std::{CosmosMsg, CustomMsg, Uint128};
+use cosmwasm_std::{Coin, CosmosMsg, CustomMsg, Uint128};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -45,6 +45,33 @@ pub enum OsmosisMsg {
         first: Swap,
         route: Vec<Step>,
         amount: SwapAmountWithLimit,
+    },
+    /// Add liquidity to a specified pool to get an exact amount of LP shares while specifying a maximum number tokens
+    /// willing to swap to receive said LP shares.
+    JoinPoolNoSwap {
+        pool_id: u64,
+        share_out_amount: Uint128,
+        token_in_maxs: Vec<Coin>,
+    },
+    /// Add liquidity to a specified pool with only one of the required assets (i.e. Join pool 1 (50/50 ATOM-OSMO) with just ATOM).
+    JoinSwapExactAmountIn {
+        pool_id: u64,
+        share_out_min_amount: Uint128,
+        token_in: Coin,
+    },
+    /// Remove liquidity from a specified pool with an **exact** amount of LP shares while specifying the **minimum** number of tokens willing to receive for said LP shares.
+    ExitPool {
+        pool_id: u64,
+        share_in_amount: Uint128,
+        token_out_mins: Vec<Coin>,
+    },
+    /// Remove an **exact** amount of LP shares from a specified pool, swap the LP shares to
+    /// one of the token pairs to receive a **minimum** of the specified token amount.
+    ExitSwapShareAmountIn {
+        pool_id: u64,
+        share_in_amount: Uint128,
+        token_out_min_amount: Uint128,
+        token_out_denom: String,
     },
 }
 
