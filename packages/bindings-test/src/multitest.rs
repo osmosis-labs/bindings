@@ -1,4 +1,4 @@
-use anyhow::{bail, Result as AnyResult};
+use anyhow::{bail, Error, Result as AnyResult};
 use itertools::Itertools;
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
@@ -9,6 +9,7 @@ use std::iter;
 use std::ops::{Deref, DerefMut};
 use thiserror::Error;
 
+use crate::error::ContractError;
 use cosmwasm_std::testing::{MockApi, MockStorage};
 use cosmwasm_std::{
     coins, to_binary, Addr, Api, BankMsg, Binary, BlockInfo, Coin, CustomQuery, Decimal, Empty,
@@ -18,11 +19,9 @@ use cw_multi_test::{
     App, AppResponse, BankKeeper, BankSudo, BasicAppBuilder, CosmosRouter, Module, WasmKeeper,
 };
 use cw_storage_plus::Map;
-
-use crate::error::ContractError;
 use osmo_bindings::{
-    FullDenomResponse, OsmosisMsg, OsmosisQuery, PoolStateResponse, SpotPriceResponse, Step, Swap,
-    SwapAmount, SwapAmountWithLimit, SwapResponse,
+    FullDenomResponse, JoinPoolSharesResponse, OsmosisMsg, OsmosisQuery, PoolStateResponse,
+    SpotPriceResponse, Step, Swap, SwapAmount, SwapAmountWithLimit, SwapResponse,
 };
 
 pub const POOLS: Map<u64, Pool> = Map::new("pools");
@@ -679,6 +678,34 @@ impl Module for OsmosisModule {
 
                 Ok(to_binary(&SwapResponse { amount })?)
             }
+            OsmosisQuery::JoinPoolShares { pool_id, coins } => {
+                let pool = POOLS.load(storage, pool_id)?;
+                if coins.len() == 1 {
+                    let res_before_join = pool.clone().into_response(pool_id);
+                    let res_after_join =
+                        pool.join_swap_exact_amount_in(&coins[0], pool_id, Uint128::zero());
+                    Ok(to_binary(&JoinPoolSharesResponse {
+                        assets: res_after_join.assets,
+                        shares: res_after_join
+                            .shares
+                            .amount
+                            .checked_sub(res_before_join.shares.amount)?,
+                    })?)
+                } else if coins.len() == 2 {
+                    let res_before_join = pool.clone().into_response(pool_id);
+                    let res_after_join =
+                        pool.join_pool_no_swap(&coins[0], &coins[1], pool_id, Uint128::zero());
+                    Ok(to_binary(&JoinPoolSharesResponse {
+                        assets: res_after_join.assets,
+                        shares: res_after_join
+                            .shares
+                            .amount
+                            .checked_sub(res_before_join.shares.amount)?,
+                    })?)
+                } else {
+                    return Err(Error::new(ContractError::InvalidNumberOfAssets {}));
+                }
+            }
         }
     }
 }
@@ -772,6 +799,7 @@ impl OsmosisApp {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
     use cosmwasm_std::testing::MOCK_CONTRACT_ADDR;
     use cosmwasm_std::{coin, from_binary, from_slice, Uint128};
@@ -1491,5 +1519,32 @@ mod tests {
         let SwapResponse { amount } = app.wrap().query(&query.into()).unwrap();
         let expected = SwapAmount::In(Uint128::new(2007));
         assert_eq!(amount, expected);
+    }
+
+    #[test]
+    fn query_join_pool_shares() {
+        let pool = Pool::new(coin(2_000_000, "atom"), coin(1_000_000, "btc"));
+
+        // set up with one pool
+        let mut app = OsmosisApp::new();
+        app.init_modules(|router, _, storage| {
+            router.custom.set_pool(storage, 1, &pool).unwrap();
+        });
+
+        let query = OsmosisQuery::PoolState { id: 1 }.into();
+        let state: PoolStateResponse = app.wrap().query(&query).unwrap();
+
+        let query = OsmosisQuery::JoinPoolShares {
+            pool_id: 1,
+            coins: vec![coin(200_000, "atom"), coin(100_000, "btc")],
+        };
+
+        let JoinPoolSharesResponse { assets: _, shares } = app.wrap().query(&query.into()).unwrap();
+
+        // 10% of total liqudity was added to pool
+        assert_eq!(
+            state.shares.amount.checked_div(Uint128::new(10)).unwrap(),
+            shares
+        );
     }
 }

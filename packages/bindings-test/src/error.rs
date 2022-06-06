@@ -8,4 +8,7 @@ pub enum ContractError {
 
     #[error("Invalid full denom '{full_denom}'")]
     InvalidFullDenom { full_denom: String },
+
+    #[error("Invalid number of assets added to pool")]
+    InvalidNumberOfAssets {},
 }

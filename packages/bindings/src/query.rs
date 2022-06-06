@@ -33,6 +33,8 @@ pub enum OsmosisQuery {
         route: Vec<Step>,
         amount: SwapAmount,
     },
+    /// Return the amount of shares and the liquidty given if a user joins a liquidity pool.
+    JoinPoolShares { pool_id: u64, coins: Vec<Coin> },
 }
 
 impl CustomQuery for OsmosisQuery {}
@@ -74,6 +76,14 @@ pub struct PoolStateResponse {
     pub assets: Vec<Coin>,
     /// The number of lp shares and their amount
     pub shares: Coin,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct JoinPoolSharesResponse {
+    /// The LP tokens a user would receive upon joining a liquidity pool.
+    pub assets: Vec<Coin>,
+    /// The number of lp shares and their amount
+    pub shares: Uint128,
 }
 
 impl PoolStateResponse {
