@@ -121,11 +121,23 @@ impl OsmosisMsg {
         }
     }
 
-    pub fn burn_contract_tokens(denom: String, amount: Uint128) -> Self {
+    pub fn mint_contract_tokens(denom: String, amount: Uint128, mint_to_address: String) -> Self {
+        OsmosisMsg::MintTokens {
+            denom,
+            amount,
+            mint_to_address,
+        }
+    }
+
+    pub fn burn_contract_tokens(
+        denom: String,
+        amount: Uint128,
+        _burn_from_address: String,
+    ) -> Self {
         OsmosisMsg::BurnTokens {
             denom,
             amount,
-            burn_from_address: "".to_string(),
+            burn_from_address: "".to_string(), // burn_from_address is currently disabled.
         }
     }
 }
