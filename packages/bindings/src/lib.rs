@@ -8,7 +8,7 @@ pub use querier::OsmosisQuerier;
 pub use query::{
     FullDenomResponse, OsmosisQuery, PoolStateResponse, SpotPriceResponse, SwapResponse,
 };
-pub use types::{Step, Swap, SwapAmount, SwapAmountWithLimit};
+pub use types::{LockTokensResponse, Step, Swap, SwapAmount, SwapAmountWithLimit};
 
 // This is a signal, such that any contract that imports these helpers will only run on the
 // osmosis blockchain
