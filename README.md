@@ -147,7 +147,7 @@ without the need of message passing (see the Cosmwasm documentation on
 To do this you can create an `OsmosisQuery` and a `QueryRequest<OsmosisQuery>`
 to be dispatched by the querier.
 
-The folowing code createds a `PoolState` variant of `OsmosisQuery` and passes it
+The following code createds a `PoolState` variant of `OsmosisQuery` and passes it
 to the querier:
 
 ``` rust
@@ -169,7 +169,7 @@ Please note that the `deps` used in both these queries need to be of type
 `Deps<OsmosisQuery>` (or `DepsMut<OsmosisQuery>`). Otherwise the default
 implementation would assume an `Empty` custom query,
 
-## Executting transactions as (sub)messages
+## Executing transactions as (sub)messages
 
 To execute osmosis transactions as part of your contract's execute response. You
 can create create the `OsmosisMsg` and provide it as part of your contract's response.
