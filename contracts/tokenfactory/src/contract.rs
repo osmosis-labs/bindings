@@ -527,7 +527,7 @@ mod tests {
     }
 
     #[test]
-    fn msg_burn_tokens_input_adddress() {
+    fn msg_burn_tokens_input_address() {
         let mut deps = mock_dependencies();
 
         const BURN_FROM_ADDR: &str = "burnfrom";
