@@ -81,8 +81,8 @@ impl OsmosisQuery {
         pool_id: u64,
         quote_asset_denom: impl Into<String>,
         base_asset_denom: impl Into<String>,
-        start_time: impl Into<SystemTime>,
-        end_time: impl Into<SystemTime>,
+        start_time: impl Into<Timestamp>,
+        end_time: impl Into<Timestamp>,
     ) -> Self {
         OsmosisQuery::ArithmeticTwap {
             id: pool_id,
@@ -97,7 +97,7 @@ impl OsmosisQuery {
         pool_id: u64,
         quote_asset_denom: impl Into<String>,
         base_asset_denom: impl Into<String>,
-        start_time: impl Into<SystemTime>,
+        start_time: impl Into<Timestamp>,
     ) -> Self {
         OsmosisQuery::ArithmeticTwapToNow{
             id: pool_id,
