@@ -6,7 +6,7 @@ mod types;
 pub use msg::OsmosisMsg;
 pub use querier::OsmosisQuerier;
 pub use query::{
-    FullDenomResponse, OsmosisQuery, PoolStateResponse, SpotPriceResponse, SwapResponse,
+    FullDenomResponse, OsmosisQuery, PoolStateResponse, SpotPriceResponse, SwapResponse, ArithmeticTwapResponse, ArithmeticTwapToNowResponse
 };
 pub use types::{Step, Swap, SwapAmount, SwapAmountWithLimit};
 

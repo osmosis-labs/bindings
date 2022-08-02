@@ -22,7 +22,7 @@ use cw_storage_plus::Map;
 use crate::error::ContractError;
 use osmo_bindings::{
     FullDenomResponse, OsmosisMsg, OsmosisQuery, PoolStateResponse, SpotPriceResponse, Step, Swap,
-    SwapAmount, SwapAmountWithLimit, SwapResponse,
+    SwapAmount, SwapAmountWithLimit, SwapResponse, ArithmeticTwapResponse, ArithmeticTwapToNowResponse
 };
 
 pub const POOLS: Map<u64, Pool> = Map::new("pools");
@@ -152,6 +152,29 @@ impl Pool {
             }
         }
     }
+
+    // TODO: implement twap logic
+    pub fn arithmetic_twap(
+        &self,
+        quote_asset_denom: &str,
+        base_asset_denom: &str,
+
+    ) -> Result <Decimal, OsmosisError> {
+        let twap = Decimal::zero();
+        Ok(twap)
+    }
+
+    // TODO: implement twap logic
+    pub fn arithmetic_twap_to_now(
+        &self,
+        quote_asset_denom: &str,
+        base_asset_denom: &str,
+
+    ) -> Result <Decimal, OsmosisError> {
+        let twap = Decimal::zero();
+        Ok(twap)
+    }
+
 
     pub fn gamm_denom(&self, pool_id: u64) -> String {
         // see https://github.com/osmosis-labs/osmosis/blob/e13cddc698a121dce2f8919b2a0f6a743f4082d6/x/gamm/types/key.go#L52-L54
@@ -429,6 +452,27 @@ impl Module for OsmosisModule {
                 let (amount, _) = complex_swap(storage, first, route, amount)?;
 
                 Ok(to_binary(&SwapResponse { amount })?)
+            }
+            OsmosisQuery::ArithmeticTwap {
+                id,
+                quote_asset_denom,
+                base_asset_denom,
+                start_time,
+                end_time,
+            } => {
+                let pool = POOLS.load(storage, id)?;
+                let twap = pool.arithmetic_twap(&quote_asset_denom, &base_asset_denom)?;
+                Ok(to_binary(&ArithmeticTwapResponse {twap})?)
+            }
+            OsmosisQuery::ArithmeticTwapToNow {
+                id,
+                quote_asset_denom,
+                base_asset_denom,
+                start_time,
+            } => {
+                let pool = POOLS.load(storage, id)?;
+                let twap = pool.arithmetic_twap(&quote_asset_denom, &base_asset_denom)?;
+                Ok(to_binary(&ArithmeticTwapToNowResponse {twap})?)
             }
         }
     }
