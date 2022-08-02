@@ -1,9 +1,8 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::time::SystemTime;
 
 use crate::types::{Step, Swap, SwapAmount};
-use cosmwasm_std::{Coin, CustomQuery, Decimal, Uint128};
+use cosmwasm_std::{Coin, CustomQuery, Decimal, Uint128, Timestamp};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -39,15 +38,15 @@ pub enum OsmosisQuery {
         id: u64,
         quote_asset_denom: String,
         base_asset_denom: String,
-        start_time: SystemTime,
-        end_time : SystemTime,
+        start_time: Timestamp,
+        end_time : Timestamp,
     },    	
     // Returns the accumulated historical TWAP of the given base asset and quote asset.
     ArithmeticTwapToNow {
         id: u64,
         quote_asset_denom: String,
         base_asset_denom: String,
-        start_time: SystemTime,
+        start_time: Timestamp,
     },
 }
 
