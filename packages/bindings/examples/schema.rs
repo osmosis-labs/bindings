@@ -4,7 +4,8 @@ use std::fs::create_dir_all;
 use cosmwasm_schema::{export_schema, remove_schemas, schema_for};
 
 use osmo_bindings::{
-    FullDenomResponse, OsmosisMsg, OsmosisQuery, PoolStateResponse, SpotPriceResponse, SwapResponse, ArithmeticTwapResponse, ArithmeticTwapToNowResponse,
+    ArithmeticTwapResponse, ArithmeticTwapToNowResponse, FullDenomResponse, OsmosisMsg,
+    OsmosisQuery, PoolStateResponse, SpotPriceResponse, SwapResponse,
 };
 
 fn main() {

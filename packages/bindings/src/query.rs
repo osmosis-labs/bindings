@@ -2,7 +2,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::types::{Step, Swap, SwapAmount};
-use cosmwasm_std::{Coin, CustomQuery, Decimal, Uint128, Timestamp};
+use cosmwasm_std::{Coin, CustomQuery, Decimal, Timestamp, Uint128};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -39,8 +39,8 @@ pub enum OsmosisQuery {
         quote_asset_denom: String,
         base_asset_denom: String,
         start_time: Timestamp,
-        end_time : Timestamp,
-    },    	
+        end_time: Timestamp,
+    },
     // Returns the accumulated historical TWAP of the given base asset and quote asset.
     ArithmeticTwapToNow {
         id: u64,
@@ -86,7 +86,7 @@ impl OsmosisQuery {
     ) -> Self {
         OsmosisQuery::ArithmeticTwap {
             id: pool_id,
-            quote_asset_denom: quote_asset_denom.into(), 
+            quote_asset_denom: quote_asset_denom.into(),
             base_asset_denom: base_asset_denom.into(),
             start_time: start_time.into(),
             end_time: end_time.into(),
@@ -99,9 +99,9 @@ impl OsmosisQuery {
         base_asset_denom: impl Into<String>,
         start_time: impl Into<Timestamp>,
     ) -> Self {
-        OsmosisQuery::ArithmeticTwapToNow{
+        OsmosisQuery::ArithmeticTwapToNow {
             id: pool_id,
-            quote_asset_denom: quote_asset_denom.into(), 
+            quote_asset_denom: quote_asset_denom.into(),
             base_asset_denom: base_asset_denom.into(),
             start_time: start_time.into(),
         }
