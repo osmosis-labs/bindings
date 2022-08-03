@@ -153,28 +153,37 @@ impl Pool {
         }
     }
 
-    // TODO: implement twap logic
+    // returns spot price as place holders, not the arithmetic twap value
     pub fn arithmetic_twap(
         &self,
         quote_asset_denom: &str,
         base_asset_denom: &str,
 
     ) -> Result <Decimal, OsmosisError> {
-        let twap = Decimal::zero();
-        Ok(twap)
+        let (bal_in, bal_out) = match (self.get_amount(quote_asset_denom), self.get_amount(base_asset_denom)) {
+            (Some(a), Some(b)) => (a, b),
+            _ => return Err(OsmosisError::AssetNotInPool),
+        };
+        let mult = Decimal::one();
+        let price = Decimal::from_ratio(bal_out * mult, bal_in);
+        Ok(price)
     }
 
-    // TODO: implement twap logic
+    // returns spot price as place holders, not the arithmetic twap to now value
     pub fn arithmetic_twap_to_now(
         &self,
         quote_asset_denom: &str,
         base_asset_denom: &str,
 
     ) -> Result <Decimal, OsmosisError> {
-        let twap = Decimal::zero();
-        Ok(twap)
+        let (bal_in, bal_out) = match (self.get_amount(quote_asset_denom), self.get_amount(base_asset_denom)) {
+            (Some(a), Some(b)) => (a, b),
+            _ => return Err(OsmosisError::AssetNotInPool),
+        };
+        let mult = Decimal::one();
+        let price = Decimal::from_ratio(bal_out * mult, bal_in);
+        Ok(price)
     }
-
 
     pub fn gamm_denom(&self, pool_id: u64) -> String {
         // see https://github.com/osmosis-labs/osmosis/blob/e13cddc698a121dce2f8919b2a0f6a743f4082d6/x/gamm/types/key.go#L52-L54
@@ -453,6 +462,7 @@ impl Module for OsmosisModule {
 
                 Ok(to_binary(&SwapResponse { amount })?)
             }
+            #[allow(unused_variables)]
             OsmosisQuery::ArithmeticTwap {
                 id,
                 quote_asset_denom,
@@ -464,6 +474,7 @@ impl Module for OsmosisModule {
                 let twap = pool.arithmetic_twap(&quote_asset_denom, &base_asset_denom)?;
                 Ok(to_binary(&ArithmeticTwapResponse {twap})?)
             }
+            #[allow(unused_variables)]
             OsmosisQuery::ArithmeticTwapToNow {
                 id,
                 quote_asset_denom,
@@ -471,7 +482,7 @@ impl Module for OsmosisModule {
                 start_time,
             } => {
                 let pool = POOLS.load(storage, id)?;
-                let twap = pool.arithmetic_twap(&quote_asset_denom, &base_asset_denom)?;
+                let twap = pool.arithmetic_twap_to_now(&quote_asset_denom, &base_asset_denom)?;
                 Ok(to_binary(&ArithmeticTwapToNowResponse {twap})?)
             }
         }
