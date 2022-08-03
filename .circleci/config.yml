@@ -38,7 +38,7 @@ jobs:
           command: rustc --version; cargo --version; rustup --version
       - restore_cache:
           keys:
-            - cargocache-osmo-reflect-rust:1.57.0-{{ checksum "~/project/Cargo.lock" }}
+            - cargocache-osmo-reflect-rust:1.59.0-{{ checksum "~/project/Cargo.lock" }}
       - run:
           name: Unit Tests
           environment:
@@ -51,7 +51,7 @@ jobs:
           paths:
             - /usr/local/cargo/registry
             - target
-          key: cargocache-osmo-reflect-rust:1.57.0-{{ checksum "~/project/Cargo.lock" }}
+          key: cargocache-osmo-reflect-rust:1.59.0-{{ checksum "~/project/Cargo.lock" }}
 
   package_bindings:
     docker:
@@ -65,7 +65,7 @@ jobs:
           command: rustc --version; cargo --version; rustup --version; rustup target list --installed
       - restore_cache:
           keys:
-            - cargocache-v2-bindings:1.57.0-{{ checksum "~/project/Cargo.lock" }}
+            - cargocache-v2-bindings:1.59.0-{{ checksum "~/project/Cargo.lock" }}
       - run:
           name: Build library for native target
           command: cargo build --locked
@@ -76,7 +76,7 @@ jobs:
           paths:
             - /usr/local/cargo/registry
             - target
-          key: cargocache-v2-bindings:1.57.0-{{ checksum "~/project/Cargo.lock" }}
+          key: cargocache-v2-bindings:1.59.0-{{ checksum "~/project/Cargo.lock" }}
 
 
   package_bindings_test:
@@ -91,7 +91,7 @@ jobs:
           command: rustc --version; cargo --version; rustup --version; rustup target list --installed
       - restore_cache:
           keys:
-            - cargocache-v2-bindings-test:1.57.0-{{ checksum "~/project/Cargo.lock" }}
+            - cargocache-v2-bindings-test:1.59.0-{{ checksum "~/project/Cargo.lock" }}
       - run:
           name: Build library for native target
           command: cargo build --locked
@@ -102,11 +102,11 @@ jobs:
           paths:
             - /usr/local/cargo/registry
             - target
-          key: cargocache-v2-bindings-test:1.57.0-{{ checksum "~/project/Cargo.lock" }}
+          key: cargocache-v2-bindings-test:1.59.0-{{ checksum "~/project/Cargo.lock" }}
 
   lint:
     docker:
-      - image: rust:1.57.0
+      - image: rust:1.59.0
     steps:
       - checkout
       - run:
@@ -114,7 +114,7 @@ jobs:
           command: rustc --version; cargo --version; rustup --version; rustup target list --installed
       - restore_cache:
           keys:
-            - cargocache-v2-lint-rust:1.57.0-{{ checksum "Cargo.lock" }}
+            - cargocache-v2-lint-rust:1.59.0-{{ checksum "Cargo.lock" }}
       - run:
           name: Add rustfmt component
           command: rustup component add rustfmt
@@ -133,7 +133,7 @@ jobs:
             - target/debug/.fingerprint
             - target/debug/build
             - target/debug/deps
-          key: cargocache-v2-lint-rust:1.57.0-{{ checksum "Cargo.lock" }}
+          key: cargocache-v2-lint-rust:1.59.0-{{ checksum "Cargo.lock" }}
 
   # This runs one time on the top level to ensure all contracts compile properly into wasm.
   # We don't run the wasm build per contract build, and then reuse a lot of the same dependencies, so this speeds up CI time
@@ -228,7 +228,7 @@ jobs:
 
   build_and_upload_schemas:
     docker:
-      - image: rust:1.57.0
+      - image: rust:1.59.0
     working_directory: ~/project
     steps:
       - checkout:
