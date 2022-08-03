@@ -90,8 +90,8 @@ impl OsmosisQuery {
             id: pool_id,
             quote_asset_denom: quote_asset_denom.into(),
             base_asset_denom: base_asset_denom.into(),
-            start_time: start_time,
-            end_time: end_time,
+            start_time,
+            end_time,
         }
     }
 
@@ -105,7 +105,7 @@ impl OsmosisQuery {
             id: pool_id,
             quote_asset_denom: quote_asset_denom.into(),
             base_asset_denom: base_asset_denom.into(),
-            start_time: start_time,
+            start_time,
         }
     }
 }
