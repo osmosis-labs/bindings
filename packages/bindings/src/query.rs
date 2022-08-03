@@ -2,7 +2,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::types::{Step, Swap, SwapAmount};
-use cosmwasm_std::{Coin, CustomQuery, Decimal, Uint128};
+use cosmwasm_std::{Coin, CustomQuery, Decimal, Timestamp, Uint128};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -33,6 +33,21 @@ pub enum OsmosisQuery {
         route: Vec<Step>,
         amount: SwapAmount,
     },
+    // Returns the arithmetic TWAP given base asset and quote asset.
+    ArithmeticTwap {
+        id: u64,
+        quote_asset_denom: String,
+        base_asset_denom: String,
+        start_time: Timestamp,
+        end_time: Timestamp,
+    },
+    // Returns the accumulated historical TWAP of the given base asset and quote asset.
+    ArithmeticTwapToNow {
+        id: u64,
+        quote_asset_denom: String,
+        base_asset_denom: String,
+        start_time: Timestamp,
+    },
 }
 
 impl CustomQuery for OsmosisQuery {}
@@ -59,6 +74,36 @@ impl OsmosisQuery {
             first: Swap::new(pool_id, denom_in, denom_out),
             amount,
             route: vec![],
+        }
+    }
+
+    pub fn arithmetic_twap(
+        pool_id: u64,
+        quote_asset_denom: impl Into<String>,
+        base_asset_denom: impl Into<String>,
+        start_time: impl Into<Timestamp>,
+        end_time: impl Into<Timestamp>,
+    ) -> Self {
+        OsmosisQuery::ArithmeticTwap {
+            id: pool_id,
+            quote_asset_denom: quote_asset_denom.into(),
+            base_asset_denom: base_asset_denom.into(),
+            start_time: start_time.into(),
+            end_time: end_time.into(),
+        }
+    }
+
+    pub fn arithmetic_twap_to_now(
+        pool_id: u64,
+        quote_asset_denom: impl Into<String>,
+        base_asset_denom: impl Into<String>,
+        start_time: impl Into<Timestamp>,
+    ) -> Self {
+        OsmosisQuery::ArithmeticTwapToNow {
+            id: pool_id,
+            quote_asset_denom: quote_asset_denom.into(),
+            base_asset_denom: base_asset_denom.into(),
+            start_time: start_time.into(),
         }
     }
 }
@@ -109,4 +154,14 @@ pub struct SwapResponse {
     // If you query with SwapAmount::Input, this is SwapAmount::Output
     // If you query with SwapAmount::Output, this is SwapAmount::Input
     pub amount: SwapAmount,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct ArithmeticTwapResponse {
+    pub twap: Decimal,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct ArithmeticTwapToNowResponse {
+    pub twap: Decimal,
 }
