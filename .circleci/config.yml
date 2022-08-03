@@ -28,7 +28,7 @@ workflows:
 jobs:
   contract_osmo_reflect:
     docker:
-      - image: rust:1.57.0
+      - image: rust:1.59.0
     working_directory: ~/project/contracts/reflect
     steps:
       - checkout:
@@ -38,7 +38,7 @@ jobs:
           command: rustc --version; cargo --version; rustup --version
       - restore_cache:
           keys:
-            - cargocache-osmo-reflect-rust:1.59.0-{{ checksum "~/project/Cargo.lock" }}
+            - cargocache-osmo-reflect-rust:1.57.0-{{ checksum "~/project/Cargo.lock" }}
       - run:
           name: Unit Tests
           environment:
@@ -55,7 +55,7 @@ jobs:
 
   package_bindings:
     docker:
-      - image: rust:1.57.0
+      - image: rust:1.59.0
     working_directory: ~/project/packages/bindings
     steps:
       - checkout:
@@ -81,7 +81,7 @@ jobs:
 
   package_bindings_test:
     docker:
-      - image: rust:1.57.0
+      - image: rust:1.59.0
     working_directory: ~/project/packages/bindings-test
     steps:
       - checkout:
@@ -141,7 +141,7 @@ jobs:
   # We also sanity-check the resultant wasm files.
   wasm_build:
     docker:
-      - image: rust:1.57.0
+      - image: rust:1.59.0
     steps:
       - checkout:
           path: ~/project
@@ -150,7 +150,7 @@ jobs:
           command: rustc --version; cargo --version; rustup --version
       - restore_cache:
           keys:
-            - cargocache-wasm-rust:1.57.0-{{ checksum "~/project/Cargo.lock" }}
+            - cargocache-wasm-rust:1.59.0-{{ checksum "~/project/Cargo.lock" }}
       - run:
           name: Add wasm32 target
           command: rustup target add wasm32-unknown-unknown
@@ -170,7 +170,7 @@ jobs:
           paths:
             - /usr/local/cargo/registry
             - target
-          key: cargocache-wasm-rust:1.57.0-{{ checksum "~/project/Cargo.lock" }}
+          key: cargocache-wasm-rust:1.59.0-{{ checksum "~/project/Cargo.lock" }}
       - run:
           name: Check wasm contracts
           command: |
