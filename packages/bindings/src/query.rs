@@ -43,7 +43,7 @@ pub enum OsmosisQuery {
         end_time: i64,
     },
     // Returns the accumulated historical TWAP of the given base asset and quote asset.
-    // start_time should be based on Unix time. 
+    // start_time should be based on Unix time.
     ArithmeticTwapToNow {
         id: u64,
         quote_asset_denom: String,
