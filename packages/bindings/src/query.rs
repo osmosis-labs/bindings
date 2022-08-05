@@ -34,7 +34,7 @@ pub enum OsmosisQuery {
         amount: SwapAmount,
     },
     // Returns the Arithmetic TWAP given base asset and quote asset.
-    // start_time and end_time should be based on Unix time.
+    // CONTRACT: start_time and end_time should be based on Unix time millisecond.
     ArithmeticTwap {
         id: u64,
         quote_asset_denom: String,
@@ -43,7 +43,7 @@ pub enum OsmosisQuery {
         end_time: i64,
     },
     // Returns the accumulated historical TWAP of the given base asset and quote asset.
-    // start_time should be based on Unix time.
+    // CONTRACT: start_time should be based on Unix time millisecond.
     ArithmeticTwapToNow {
         id: u64,
         quote_asset_denom: String,

@@ -467,6 +467,7 @@ impl Module for OsmosisModule {
 
                 Ok(to_binary(&SwapResponse { amount })?)
             }
+            // ArithmeticTwap returns spot price for the multitest.
             #[allow(unused_variables)]
             OsmosisQuery::ArithmeticTwap {
                 id,
@@ -479,6 +480,7 @@ impl Module for OsmosisModule {
                 let twap = pool.arithmetic_twap(&quote_asset_denom, &base_asset_denom)?;
                 Ok(to_binary(&ArithmeticTwapResponse { twap })?)
             }
+            // ArithmeticTwapToNow returns spot price for the multitest.
             #[allow(unused_variables)]
             OsmosisQuery::ArithmeticTwapToNow {
                 id,
