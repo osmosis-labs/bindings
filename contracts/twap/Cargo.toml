@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 cosmwasm-std = "1.0.0"
 cw-storage-plus = "0.13.2"
+osmo-bindings = { version = "0.6.0", path = "../../packages/bindings" }
 cw2 = "0.13.2"
 thiserror = { version = "1.0.31" }
 schemars = "0.8.8"

@@ -1,5 +1,6 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use cosmwasm_std::{Decimal};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {}
@@ -7,14 +8,28 @@ pub struct InstantiateMsg {}
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
-    GetDenom {
-        creator_address: String,
-        subdenom: String,
+    GetArithmeticTwap {
+        id: u64,
+        quote_asset_denom: String,
+        base_asset_denom: String,
+        start_time: i64,
+        end_time: i64,
+    },
+    GetArithmeticTwapToNow {
+        id: u64,
+        quote_asset_denom: String,
+        base_asset_denom: String,
+        start_time: i64,
     },
 }
 
 // We define a custom struct for each query response
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct GetDenomResponse {
-    pub denom: String,
+pub struct GetArithmeticTwapResponse {
+    pub twap: Decimal,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct GetArithmeticTwapResponseToNow {
+    pub twap: Decimal,
 }

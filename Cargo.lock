@@ -736,6 +736,7 @@ dependencies = [
  "cosmwasm-std",
  "cw-storage-plus",
  "cw2",
+ "osmo-bindings",
  "schemars",
  "serde",
  "thiserror",
