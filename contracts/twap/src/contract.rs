@@ -1,14 +1,14 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Uint128,
+    to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult,
 };
 use cw2::set_contract_version;
 
 use crate::error::TwapError;
-use crate::msg::{ExecuteMsg, GetDenomResponse, InstantiateMsg, QueryMsg, GetArithmeticTwapResponse, GetArithmeticTwapResponseToNow};
+use crate::msg::{ InstantiateMsg, QueryMsg, GetArithmeticTwapResponse, GetArithmeticTwapResponseToNow};
 use crate::state::{State, STATE};
-use osmo_bindings::{OsmosisMsg, OsmosisQuerier, OsmosisQuery};
+use osmo_bindings::{OsmosisQuerier, OsmosisQuery};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:twap-demo";

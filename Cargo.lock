@@ -733,10 +733,13 @@ dependencies = [
 name = "twap"
 version = "0.1.0"
 dependencies = [
+ "cosmwasm-schema",
  "cosmwasm-std",
+ "cw-multi-test",
  "cw-storage-plus",
  "cw2",
  "osmo-bindings",
+ "osmo-bindings-test",
  "schemars",
  "serde",
  "thiserror",
