@@ -3,7 +3,9 @@ use std::fs::create_dir_all;
 
 use cosmwasm_schema::{export_schema, remove_schemas, schema_for};
 
-use twap::msg::{InstantiateMsg, QueryMsg, GetArithmeticTwapResponse, GetArithmeticTwapResponseToNow};
+use twap::msg::{
+    GetArithmeticTwapResponse, GetArithmeticTwapResponseToNow, InstantiateMsg, QueryMsg,
+};
 use twap::state::State;
 
 fn main() {

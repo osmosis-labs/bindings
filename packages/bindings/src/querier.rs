@@ -1,6 +1,8 @@
 use cosmwasm_std::{QuerierWrapper, QueryRequest, StdResult};
 
-use crate::query::{OsmosisQuery, FullDenomResponse, ArithmeticTwapResponse, ArithmeticTwapToNowResponse};
+use crate::query::{
+    ArithmeticTwapResponse, ArithmeticTwapToNowResponse, FullDenomResponse, OsmosisQuery,
+};
 
 /// This is a helper wrapper to easily use our custom queries
 pub struct OsmosisQuerier<'a> {
