@@ -497,7 +497,7 @@ impl OsmosisApp {
     }
 
     /// This advances BlockInfo by given number of blocks.
-    /// It does not do any callbacks, but keeps the ratio of seconds/blokc
+    /// It does not do any callbacks, but keeps the ratio of seconds/block
     pub fn advance_blocks(&mut self, blocks: u64) {
         self.update_block(|block| {
             block.time = block.time.plus_seconds(BLOCK_TIME * blocks);
@@ -506,7 +506,7 @@ impl OsmosisApp {
     }
 
     /// This advances BlockInfo by given number of seconds.
-    /// It does not do any callbacks, but keeps the ratio of seconds/blokc
+    /// It does not do any callbacks, but keeps the ratio of seconds/block
     pub fn advance_seconds(&mut self, seconds: u64) {
         self.update_block(|block| {
             block.time = block.time.plus_seconds(seconds);
