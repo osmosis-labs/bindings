@@ -8,24 +8,19 @@ The contract messages only do some input validation and
 directly call into their respective bindings outlined in the
 "Messages" section below.
 
-Contract messages are not available 
+The contract is only consisted of Queries outlined in the "Queries" section below, which serves the purpose of querying the twap state of the state machine. This example contract does not contain unique messages.
 
 There are unit tests added to demonstrate how contract
 developers might utilize `osmo-bindings-test` package
 to import and use some test utilities.
 
-## Messages
-
-There are 4 messages:
-- `ExecuteMsg::CreateDenom` maps to `OsmosisMsg::CreateDenom`
-- `ExecuteMsg::ChangeAdmin` maps to `OsmosisMsg::ChangeAdmin`
-- `ExecuteMsg::BurnTokens` maps to `OsmosisMsg::BurnTokens`
-- `ExecuteMsg::MintTokens` maps to `OsmosisMsg::MintTokens`
-
 ## Query
 
-1 query:
-- `QueryMsg::GetDenom` maps to `OsmosisQuery::FullDenom`
+There are 2 queries:
+- `QueryMsg::GetArithmeticTwap` maps to `OsmosisQuery::ArithmeticTwap`
+- `QueryMsg::GetArithmeticTwapToNow` maps to `OsmosisQuery::ArithmeticTwapToNow`
+
+The time inputs within the queries are expected to be in Unix time nano second.
 
 ## Running with LocalOsmosis
 
@@ -43,7 +38,7 @@ N.B.: All following example shell scripts assume executing them from the project
 #### Compile Wasm
 
 ```sh
-cd contracts/tokenfactory
+cd contracts/twap
 rustup default stable
 cargo wasm
 ```
@@ -60,7 +55,7 @@ sudo docker run --rm -v "$(pwd)":/code   --mount type=volume,source="$(basename 
 cd artifacts
 
 # Upload and store transaction hash in TX environment variable.
-TX=$(osmosisd tx wasm store tokenfactory.wasm  --from test1 --chain-id=localosmosis --gas-prices 0.1uosmo --gas auto --gas-adjustment 1.3 -b block --output json -y | jq -r '.txhash')
+TX=$(osmosisd tx wasm store twap.wasm  --from test1 --chain-id=localosmosis --gas-prices 0.1uosmo --gas auto --gas-adjustment 1.3 -b block --output json -y | jq -r '.txhash')
 CODE_ID=$(osmosisd query tx $TX --output json | jq -r '.logs[0].events[-1].attributes[0].value')
 echo "Your contract code_id is $CODE_ID"
 ```
@@ -68,124 +63,66 @@ echo "Your contract code_id is $CODE_ID"
 #### Instantiate the Contact
 ```sh
 # Instantiate
-osmosisd tx wasm instantiate $CODE_ID "{}" --amount 50000uosmo  --label "Token Factory Contract" --from test1 --chain-id localosmosis --gas-prices 0.1uosmo --gas auto --gas-adjustment 1.3 -b block -y --no-admin
+osmosisd tx wasm instantiate $CODE_ID "{}" --amount 50000uosmo  --label "Twap Contract" --from test1 --chain-id localosmosis --gas-prices 0.1uosmo --gas auto --gas-adjustment 1.3 -b block -y --no-admin
 
 # Get contract address.
 CONTRACT_ADDR=$(osmosisd query wasm list-contract-by-code $CODE_ID --output json | jq -r '.contracts[0]')
 echo "Your contract address is $CONTRACT_ADDR"
 ```
 
-#### Execute & Queries
+#### Queries
 
 You can generate the schema to assist you with determining the structure for each CLI query:
 
 ```sh
-cd contracts/tokenfactory
-carge schema # generates schema in the contracts/tokenfactory/schema folder
+cd contracts/twap
+cargo schema # generates schema in the contracts/twap/schema folder
 ```
 
 For example, here is the schema for `CreateDenom` message:
 
 ```json
-{
-      "type": "object",
-      "required": [
-        "create_denom"
-      ],
-      "properties": {
-        "create_denom": {
+"get_arithmetic_twap": {
           "type": "object",
           "required": [
-            "subdenom"
+            "base_asset_denom",
+            "end_time",
+            "id",
+            "quote_asset_denom",
+            "start_time"
           ],
           "properties": {
-            "subdenom": {
+            "base_asset_denom": {
               "type": "string"
+            },
+            "end_time": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "id": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "quote_asset_denom": {
+              "type": "string"
+            },
+            "start_time": {
+              "type": "integer",
+              "format": "int64"
             }
           }
         }
-      },
-      "additionalProperties": false
-    }
-```
-
-##### Messages
-
-- `Create Denom`
-```sh
-osmosisd tx wasm execute $CONTRACT_ADDR '{ "create_denom": { "subdenom": "mydenom" } }' --from test1 --amount 10000000uosmo -b block
-
-# If you do this
-osmosisd q bank total --denom factory/$CONTRACT_ADDR/mydenom
-# You should see this:
-# amount: "0"
-#denom: factory/osmo1wug8sewp6cedgkmrmvhl3lf3tulagm9hnvy8p0rppz9yjw0g4wtqcm3670/mydenom
-```
-
-- `Mint Tokens` executing from test1, minting to test2
-```sh
-TEST2_ADDR=osmo18s5lynnmx37hq4wlrw9gdn68sg2uxp5rgk26vv # This is from the result of "Download and Install LocalOsmosis" section
-
-osmosisd tx wasm execute $CONTRACT_ADDR "{ \"mint_tokens\": {\"amount\": \"100\", \"denom\": \"factory/${CONTRACT_ADDR}/mydenom\", \"mint_to_address\": \"$TEST2_ADDR\"}}" --from test1 -b block
-
-# If you do this
-osmosisd q bank total --denom factory/$CONTRACT_ADDR/mydenom
-# You should see this in the list:
-# - amount: "100"
-#   denom: factory/osmo14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9sq2r9
-```
-
-- `Burn Tokens` executing from test1, minting from test2
-
-Currently, burning from an address other than "" which refers to `$CONTRACT_ADDR` is
-not supported. If you attempt to burn from another address that
-has a custom denom minted to but is not "" (empty string), you will get an error:
-
-```sh
-osmosisd tx wasm execute $CONTRACT_ADDR "{ \"burn_tokens\": {\"amount\": \"50\", \"denom\": \"factory/${CONTRACT_ADDR}/mydenom\", \"burn_from_address\": \"$CONTRACT_ADDR\"}}" --from test1 -b block
-
-# You will see the following:
-# raw_log: 'failed to execute message; message index: 0: address is not supported yet,
-```
-
-As a result, `Burn Tokens` be tested in the following ways:
-- "pre-mint" the custom denom to the `$CONTRACT_ADDR` and then attempt to burn it from "" (empty string)
-"burn_from_address"
-- change admin to the address that has the custom denom minted to
-
-Next, we will use the first "pre-mint" approach
-
-```sh
-# Pre-mint 100 of custom denom to $CONTRACT_ADDR
-osmosisd tx wasm execute $CONTRACT_ADDR "{ \"mint_tokens\": {\"amount\": \"100\", \"denom\": \"factory/${CONTRACT_ADDR}/mydenom\", \"mint_to_address\": \"$CONTRACT_ADDR\"}}" --from test1 -b block
-
-# Try to burn 50
-osmosisd tx wasm execute $CONTRACT_ADDR "{ \"burn_tokens\": {\"amount\": \"50\", \"denom\": \"factory/${CONTRACT_ADDR}/mydenom\", \"burn_from_address\": \"\"}}" --from test1 -b block
-
-# If you do this
-osmosisd q bank total --denom factory/$CONTRACT_ADDR/mydenom
-# You should see this in the list:
-# - amount: "50"
-#   denom: factory/osmo14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9sq2r9
-```
-
-- `Change Admin` executing from test1, changing from `$CONTRACT_ADDR` to $TEST2
-
-```sh
-TEST2_ADDR=osmo18s5lynnmx37hq4wlrw9gdn68sg2uxp5rgk26vv # This is from the result of "Download and Install LocalOsmosis" section
-
-# Change Admin
-osmosisd tx wasm execute $CONTRACT_ADDR "{ \"change_admin\": {\"denom\": \"factory/${CONTRACT_ADDR}/mydenom\", \"new_admin_address\": \"${TEST2_ADDR}\"}}" --from test1 -b block
-
-# Verify New Admin
-osmosisd q tokenfactory denom-authority-metadata factory/${CONTRACT_ADDR}/mydenom
-# You should be able to see the following:
-# osmosisd q tokenfactory denom-authority-metadata factory/${CONTRACT_ADDR}/mydenom
 ```
 
 ##### Queries
 
-- `Get Denom`
+- `Get Arithmetic Twap`
 ```sh
-osmosisd query wasm contract-state smart $CONTRACT_ADDR "{ \"get_denom\": {\"creator_address\": \"${CONTRACT_ADDR}\", \"subdenom\": \"mydenom\" }}"
+osmosisd query wasm contract-state smart $CONTRACT_ADDR "{ \"get_arithmetic_twap\": {\"id\": 1 \"$\", \"base_asset_denom\": \"denom1\", \"quote_asset_denom\": \"denom2\", \"start_time\": 10 , \"end_time\": 20 }}"
+```
+
+- `Get Arithmetic Twap To Now`
+```sh
+osmosisd query wasm contract-state smart $CONTRACT_ADDR "{ \"get_arithmetic_twap\": {\"id\": 1 \"$\", \"base_asset_denom\": \"denom1\", \"quote_asset_denom\": \"denom2\", \"start_time\": 10}}"
 ```

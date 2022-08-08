@@ -1,7 +1,8 @@
 [package]
 name = "twap"
 version = "0.1.0"
-edition = "2021"
+authors = ["Matt <matt@osmosis.team>"]
+edition = "2018"
 
 exclude = [
   # Those files are rust-optimizer artifacts. You might want to commit them for convenience but they should not be part of the source code publication.
@@ -39,8 +40,6 @@ optimize = """docker run --rm -v "$(pwd)":/code \
   cosmwasm/rust-optimizer:0.12.6
 """
 
-
-
 [dependencies]
 cosmwasm-std = "1.0.0"
 cw-storage-plus = "0.13.2"
@@ -49,7 +48,6 @@ cw2 = "0.13.2"
 thiserror = { version = "1.0.31" }
 schemars = "0.8.8"
 serde = { version = "1.0.137", default-features = false, features = ["derive"] }
-
 
 [dev-dependencies]
 cosmwasm-schema = "1.0.0"
