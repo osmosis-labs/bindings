@@ -79,7 +79,7 @@ cd contracts/twap
 cargo schema # generates schema in the contracts/twap/schema folder
 ```
 
-For example, here is the schema for `CreateDenom` message:
+For example, here is the schema for `GetArithmeticTwap` query:
 
 ```json
 "get_arithmetic_twap": {
