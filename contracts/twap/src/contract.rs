@@ -5,7 +5,7 @@ use cw2::set_contract_version;
 
 use crate::error::TwapError;
 use crate::msg::{
-    GetArithmeticTwapResponse, GetArithmeticTwapResponseToNow, InstantiateMsg, QueryMsg,
+    GetArithmeticTwapResponse, GetArithmeticTwapToNowResponse, InstantiateMsg, QueryMsg,
 };
 use crate::state::{State, STATE};
 use osmo_bindings::{OsmosisQuerier, OsmosisQuery};
@@ -95,13 +95,13 @@ fn get_arithmetic_twap_to_now(
     quote_asset_denom: String,
     base_asset_denom: String,
     start_time: i64,
-) -> GetArithmeticTwapResponseToNow {
+) -> GetArithmeticTwapToNowResponse {
     let querier = OsmosisQuerier::new(&deps.querier);
     let response = querier
         .arithmetic_twap_to_now(id, quote_asset_denom, base_asset_denom, start_time)
         .unwrap();
 
-    GetArithmeticTwapResponseToNow {
+        GetArithmeticTwapToNowResponse {
         twap: response.twap,
     }
 }

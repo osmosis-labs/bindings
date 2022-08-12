@@ -30,6 +30,6 @@ pub struct GetArithmeticTwapResponse {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct GetArithmeticTwapResponseToNow {
+pub struct GetArithmeticTwapToNowResponse {
     pub twap: Decimal,
 }
