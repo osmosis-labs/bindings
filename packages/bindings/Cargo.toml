@@ -9,9 +9,9 @@ homepage = "https://osmosis.zone"
 license = "Apache-2.0"
 
 [dependencies]
-cosmwasm-std = "1.0.0-beta8"
+cosmwasm-std = "1.0.0"
 schemars = "0.8"
 serde = { version = "1.0.103", default-features = false, features = ["derive"] }
 
 [dev-dependencies]
-cosmwasm-schema = "1.0.0-beta8"
+cosmwasm-schema = "1.0.0"
