@@ -32,6 +32,23 @@ pub enum OsmosisQuery {
         route: Vec<Step>,
         amount: SwapAmount,
     },
+    // Returns the Arithmetic TWAP given base asset and quote asset.
+    // CONTRACT: start_time and end_time should be based on Unix time millisecond.
+    ArithmeticTwap {
+        id: u64,
+        quote_asset_denom: String,
+        base_asset_denom: String,
+        start_time: i64,
+        end_time: i64,
+    },
+    // Returns the accumulated historical TWAP of the given base asset and quote asset.
+    // CONTRACT: start_time should be based on Unix time millisecond.
+    ArithmeticTwapToNow {
+        id: u64,
+        quote_asset_denom: String,
+        base_asset_denom: String,
+        start_time: i64,
+    },
 }
 
 impl CustomQuery for OsmosisQuery {}
@@ -57,6 +74,36 @@ impl OsmosisQuery {
             first: Swap::new(pool_id, denom_in, denom_out),
             amount,
             route: vec![],
+        }
+    }
+
+    pub fn arithmetic_twap(
+        pool_id: u64,
+        quote_asset_denom: impl Into<String>,
+        base_asset_denom: impl Into<String>,
+        start_time: i64,
+        end_time: i64,
+    ) -> Self {
+        OsmosisQuery::ArithmeticTwap {
+            id: pool_id,
+            quote_asset_denom: quote_asset_denom.into(),
+            base_asset_denom: base_asset_denom.into(),
+            start_time,
+            end_time,
+        }
+    }
+
+    pub fn arithmetic_twap_to_now(
+        pool_id: u64,
+        quote_asset_denom: impl Into<String>,
+        base_asset_denom: impl Into<String>,
+        start_time: i64,
+    ) -> Self {
+        OsmosisQuery::ArithmeticTwapToNow {
+            id: pool_id,
+            quote_asset_denom: quote_asset_denom.into(),
+            base_asset_denom: base_asset_denom.into(),
+            start_time,
         }
     }
 }
@@ -107,4 +154,14 @@ pub struct SwapResponse {
     // If you query with SwapAmount::Input, this is SwapAmount::Output
     // If you query with SwapAmount::Output, this is SwapAmount::Input
     pub amount: SwapAmount,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct ArithmeticTwapResponse {
+    pub twap: Decimal,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+pub struct ArithmeticTwapToNowResponse {
+    pub twap: Decimal,
 }

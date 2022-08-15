@@ -21,8 +21,9 @@ use cw_storage_plus::Map;
 
 use crate::error::ContractError;
 use osmo_bindings::{
-    FullDenomResponse, OsmosisMsg, OsmosisQuery, PoolStateResponse, SpotPriceResponse, Step, Swap,
-    SwapAmount, SwapAmountWithLimit, SwapResponse,
+    ArithmeticTwapResponse, ArithmeticTwapToNowResponse, FullDenomResponse, OsmosisMsg,
+    OsmosisQuery, PoolStateResponse, SpotPriceResponse, Step, Swap, SwapAmount,
+    SwapAmountWithLimit, SwapResponse,
 };
 
 pub const POOLS: Map<u64, Pool> = Map::new("pools");
@@ -151,6 +152,42 @@ impl Pool {
                 }
             }
         }
+    }
+
+    // returns spot price as place holders, not the arithmetic twap value
+    pub fn arithmetic_twap(
+        &self,
+        quote_asset_denom: &str,
+        base_asset_denom: &str,
+    ) -> Result<Decimal, OsmosisError> {
+        let (bal_in, bal_out) = match (
+            self.get_amount(quote_asset_denom),
+            self.get_amount(base_asset_denom),
+        ) {
+            (Some(a), Some(b)) => (a, b),
+            _ => return Err(OsmosisError::AssetNotInPool),
+        };
+        let mult = Decimal::one();
+        let price = Decimal::from_ratio(bal_out * mult, bal_in);
+        Ok(price)
+    }
+
+    // returns spot price as place holders, not the arithmetic twap to now value
+    pub fn arithmetic_twap_to_now(
+        &self,
+        quote_asset_denom: &str,
+        base_asset_denom: &str,
+    ) -> Result<Decimal, OsmosisError> {
+        let (bal_in, bal_out) = match (
+            self.get_amount(quote_asset_denom),
+            self.get_amount(base_asset_denom),
+        ) {
+            (Some(a), Some(b)) => (a, b),
+            _ => return Err(OsmosisError::AssetNotInPool),
+        };
+        let mult = Decimal::one();
+        let price = Decimal::from_ratio(bal_out * mult, bal_in);
+        Ok(price)
     }
 
     pub fn gamm_denom(&self, pool_id: u64) -> String {
@@ -428,6 +465,31 @@ impl Module for OsmosisModule {
                 let (amount, _) = complex_swap(storage, first, route, amount)?;
 
                 Ok(to_binary(&SwapResponse { amount })?)
+            }
+            // ArithmeticTwap returns spot price for the multitest.
+            #[allow(unused_variables)]
+            OsmosisQuery::ArithmeticTwap {
+                id,
+                quote_asset_denom,
+                base_asset_denom,
+                start_time,
+                end_time,
+            } => {
+                let pool = POOLS.load(storage, id)?;
+                let twap = pool.arithmetic_twap(&quote_asset_denom, &base_asset_denom)?;
+                Ok(to_binary(&ArithmeticTwapResponse { twap })?)
+            }
+            // ArithmeticTwapToNow returns spot price for the multitest.
+            #[allow(unused_variables)]
+            OsmosisQuery::ArithmeticTwapToNow {
+                id,
+                quote_asset_denom,
+                base_asset_denom,
+                start_time,
+            } => {
+                let pool = POOLS.load(storage, id)?;
+                let twap = pool.arithmetic_twap_to_now(&quote_asset_denom, &base_asset_denom)?;
+                Ok(to_binary(&ArithmeticTwapToNowResponse { twap })?)
             }
         }
     }
