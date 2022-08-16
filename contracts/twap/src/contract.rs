@@ -101,7 +101,7 @@ fn get_arithmetic_twap_to_now(
         .arithmetic_twap_to_now(id, quote_asset_denom, base_asset_denom, start_time)
         .unwrap();
 
-        GetArithmeticTwapToNowResponse {
+    GetArithmeticTwapToNowResponse {
         twap: response.twap,
     }
 }
