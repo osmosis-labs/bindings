@@ -23,12 +23,9 @@ pub enum OsmosisQuery {
     /// We will add TWAP for more robust price feed.
     SpotPrice { swap: Swap, with_swap_fee: bool },
     /// Return current spot price swapping In for Out on given pool ID.
-    /// You can call `EstimateSwap { contract: env.contract.address, ... }` to set sender to the
-    /// current contract.
     /// Warning: this can easily be manipulated via sandwich attacks, do not use as price oracle.
     /// We will add TWAP for more robust price feed.
     EstimateSwap {
-        sender: String,
         first: Swap,
         route: Vec<Step>,
         amount: SwapAmount,
@@ -65,14 +62,12 @@ impl OsmosisQuery {
 
     /// Basic helper to estimate price of a swap on one pool
     pub fn estimate_swap(
-        contract: impl Into<String>,
         pool_id: u64,
         denom_in: impl Into<String>,
         denom_out: impl Into<String>,
         amount: SwapAmount,
     ) -> Self {
         OsmosisQuery::EstimateSwap {
-            sender: contract.into(),
             first: Swap::new(pool_id, denom_in, denom_out),
             amount,
             route: vec![],
