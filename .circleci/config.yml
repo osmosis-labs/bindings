@@ -28,7 +28,7 @@ workflows:
 jobs:
   contract_osmo_reflect:
     docker:
-      - image: rust:1.59.0
+      - image: rust:1.64.0
     working_directory: ~/project/contracts/reflect
     steps:
       - checkout:
@@ -38,7 +38,7 @@ jobs:
           command: rustc --version; cargo --version; rustup --version
       - restore_cache:
           keys:
-            - cargocache-osmo-reflect-rust:1.59.0-{{ checksum "~/project/Cargo.lock" }}
+            - cargocache-osmo-reflect-rust:1.64.0-{{ checksum "~/project/Cargo.lock" }}
       - run:
           name: Unit Tests
           environment:
@@ -51,11 +51,11 @@ jobs:
           paths:
             - /usr/local/cargo/registry
             - target
-          key: cargocache-osmo-reflect-rust:1.59.0-{{ checksum "~/project/Cargo.lock" }}
+          key: cargocache-osmo-reflect-rust:1.64.0-{{ checksum "~/project/Cargo.lock" }}
 
   package_bindings:
     docker:
-      - image: rust:1.59.0
+      - image: rust:1.64.0
     working_directory: ~/project/packages/bindings
     steps:
       - checkout:
@@ -81,7 +81,7 @@ jobs:
 
   package_bindings_test:
     docker:
-      - image: rust:1.59.0
+      - image: rust:1.64.0
     working_directory: ~/project/packages/bindings-test
     steps:
       - checkout:
@@ -91,7 +91,7 @@ jobs:
           command: rustc --version; cargo --version; rustup --version; rustup target list --installed
       - restore_cache:
           keys:
-            - cargocache-v2-bindings-test:1.59.0-{{ checksum "~/project/Cargo.lock" }}
+            - cargocache-v2-bindings-test:1.64.0-{{ checksum "~/project/Cargo.lock" }}
       - run:
           name: Build library for native target
           command: cargo build --locked
@@ -106,7 +106,7 @@ jobs:
 
   lint:
     docker:
-      - image: rust:1.59.0
+      - image: rust:1.64.0
     steps:
       - checkout
       - run:
@@ -114,7 +114,7 @@ jobs:
           command: rustc --version; cargo --version; rustup --version; rustup target list --installed
       - restore_cache:
           keys:
-            - cargocache-v2-lint-rust:1.59.0-{{ checksum "Cargo.lock" }}
+            - cargocache-v2-lint-rust:1.64.0-{{ checksum "Cargo.lock" }}
       - run:
           name: Add rustfmt component
           command: rustup component add rustfmt
@@ -133,7 +133,7 @@ jobs:
             - target/debug/.fingerprint
             - target/debug/build
             - target/debug/deps
-          key: cargocache-v2-lint-rust:1.59.0-{{ checksum "Cargo.lock" }}
+          key: cargocache-v2-lint-rust:1.64.0-{{ checksum "Cargo.lock" }}
 
   # This runs one time on the top level to ensure all contracts compile properly into wasm.
   # We don't run the wasm build per contract build, and then reuse a lot of the same dependencies, so this speeds up CI time
@@ -141,7 +141,7 @@ jobs:
   # We also sanity-check the resultant wasm files.
   wasm_build:
     docker:
-      - image: rust:1.59.0
+      - image: rust:1.64.0
     steps:
       - checkout:
           path: ~/project
@@ -150,7 +150,7 @@ jobs:
           command: rustc --version; cargo --version; rustup --version
       - restore_cache:
           keys:
-            - cargocache-wasm-rust:1.59.0-{{ checksum "~/project/Cargo.lock" }}
+            - cargocache-wasm-rust:1.64.0-{{ checksum "~/project/Cargo.lock" }}
       - run:
           name: Add wasm32 target
           command: rustup target add wasm32-unknown-unknown
@@ -160,17 +160,17 @@ jobs:
             for C in ./contracts/*/
             do
               echo "Compiling $(basename $C) ..."
-              (cd $C && cargo build --release --target wasm32-unknown-unknown --locked)
+              (cd $C && cargo build --release --lib --target wasm32-unknown-unknown --locked)
             done
       - run:
           name: Install check_contract
           # Uses --debug for compilation speed.
-          command: cargo install --debug --features iterator --example check_contract --version 1.0.0-beta7 -- cosmwasm-vm
+          command: cargo install --debug --version 1.1.0 cosmwasm-check
       - save_cache:
           paths:
             - /usr/local/cargo/registry
             - target
-          key: cargocache-wasm-rust:1.59.0-{{ checksum "~/project/Cargo.lock" }}
+          key: cargocache-wasm-rust:1.64.0-{{ checksum "~/project/Cargo.lock" }}
       - run:
           name: Check wasm contracts
           command: |
@@ -206,7 +206,7 @@ jobs:
       - run:
           name: Build development contracts
           command: |
-            docker run --volumes-from with_code cosmwasm/workspace-optimizer:0.12.6
+            docker run --volumes-from with_code cosmwasm/workspace-optimizer:0.12.8
             docker cp with_code:/code/artifacts ./artifacts
       - run:
           name: Show data
@@ -228,7 +228,7 @@ jobs:
 
   build_and_upload_schemas:
     docker:
-      - image: rust:1.59.0
+      - image: rust:1.64.0
     working_directory: ~/project
     steps:
       - checkout:
