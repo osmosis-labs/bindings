@@ -28,7 +28,7 @@ use osmo_bindings::{
 
 pub const POOLS: Map<u64, Pool> = Map::new("pools");
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema, Debug)]
 pub struct Pool {
     pub assets: Vec<Coin>,
     pub shares: Uint128,

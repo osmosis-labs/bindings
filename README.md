@@ -5,7 +5,7 @@ CosmWasm bindings to custom Osmosis features.
 ## Prerequisites
 
 Before starting, make sure you have [rustup](https://rustup.rs/) along with a
-recent `rustc` and `cargo` version installed. Currently, we are testing on 1.58.1+.
+recent `rustc` and `cargo` version installed. Currently, we are testing on 1.64+.
 
 And you need to have the `wasm32-unknown-unknown` target installed as well.
 
@@ -82,7 +82,7 @@ to run it is this:
 docker run --rm -v "$(pwd)":/code \
   --mount type=volume,source="$(basename "$(pwd)")_cache",target=/code/target \
   --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
-  cosmwasm/workspace-optimizer:0.12.6
+  cosmwasm/workspace-optimizer:0.12.8
 ```
 
 Or, If you're on an arm64 machine, you should use a docker image built with arm64.
@@ -90,7 +90,7 @@ Or, If you're on an arm64 machine, you should use a docker image built with arm6
 docker run --rm -v "$(pwd)":/code \
   --mount type=volume,source="$(basename "$(pwd)")_cache",target=/code/target \
   --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
-  cosmwasm/workspace-optimizer-arm64:0.12.6
+  cosmwasm/workspace-optimizer-arm64:0.12.8
 ```
 
 We must mount the contract code to `/code`. You can use a absolute path instead
