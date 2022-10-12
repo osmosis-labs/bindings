@@ -1,13 +1,11 @@
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use cosmwasm_schema::cw_serde;
+use cosmwasm_std::{CosmosMsg, CustomMsg, Uint128};
 
 use crate::types::SwapAmountWithLimit;
 use crate::{Step, Swap};
-use cosmwasm_std::{CosmosMsg, CustomMsg, Uint128};
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, Debug)]
-#[serde(rename_all = "snake_case")]
 /// A number of Custom messages that can call into the Osmosis bindings
+#[cw_serde]
 pub enum OsmosisMsg {
     /// CreateDenom creates a new factory denom, of denomination:
     /// factory/{creating contract bech32 address}/{Subdenom}
