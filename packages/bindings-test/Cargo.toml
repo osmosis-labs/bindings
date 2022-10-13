@@ -1,6 +1,6 @@
 [package]
 name = "osmo-bindings-test"
-version = "0.6.0"
+version = "0.7.0"
 authors = ["Ethan Frey <ethanfrey@users.noreply.github.com>"]
 edition = "2018"
 description = "Multitest (and other test helpers) support for Osmosis-specific contracts"
@@ -10,7 +10,7 @@ license = "Apache-2.0"
 
 [dependencies]
 itertools = "0.10"
-osmo-bindings = { version = "0.6.0", path = "../bindings" }
+osmo-bindings = { version = "0.7.0", path = "../bindings" }
 cosmwasm-std = "1.1"
 schemars = "0.8"
 serde = { version = "1.0", default-features = false, features = ["derive"] }
