@@ -1,50 +1,44 @@
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-
+use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::{Binary, CosmosMsg, QueryRequest, SubMsg};
 
 use osmo_bindings::{OsmosisMsg, OsmosisQuery};
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct InstantiateMsg {}
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub enum ExecuteMsg {
     ReflectMsg { msgs: Vec<CosmosMsg<OsmosisMsg>> },
     ReflectSubMsg { msgs: Vec<SubMsg<OsmosisMsg>> },
     ChangeOwner { owner: String },
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
+#[derive(QueryResponses)]
 pub enum QueryMsg {
+    #[returns(OwnerResponse)]
     Owner {},
     /// Queries the blockchain and returns the result untouched
-    Chain {
-        request: QueryRequest<OsmosisQuery>,
-    },
+    #[returns(ChainResponse)]
+    Chain { request: QueryRequest<OsmosisQuery> },
     /// If there was a previous ReflectSubMsg with this ID, returns cosmwasm_std::Reply
-    SubMsgResult {
-        id: u64,
-    },
+    #[returns(cosmwasm_std::Reply)]
+    SubMsgResult { id: u64 },
 }
 
 // We define a custom struct for each query response
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[cw_serde]
 pub struct OwnerResponse {
     pub owner: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub struct CapitalizedResponse {
     pub text: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
+#[cw_serde]
 pub struct ChainResponse {
     pub data: Binary,
 }
