@@ -26,7 +26,7 @@ library = []
 cosmwasm-schema = "1.1"
 cosmwasm-std = "1.1"
 cw-storage-plus = "0.15"
-osmo-bindings = { version = "0.6.0", path = "../../packages/bindings" }
+osmo-bindings = { version = "0.7.0", path = "../../packages/bindings" }
 cw2 = "0.15"
 thiserror = "1.0"
 schemars = "0.8"
@@ -34,4 +34,4 @@ serde = { version = "1.0", default-features = false, features = ["derive"] }
 
 [dev-dependencies]
 cw-multi-test = "0.15"
-osmo-bindings-test = { version = "0.6.0", path = "../../packages/bindings-test" }
+osmo-bindings-test = { version = "0.7.0", path = "../../packages/bindings-test" }

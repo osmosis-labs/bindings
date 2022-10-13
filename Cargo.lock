@@ -466,7 +466,7 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "osmo-bindings"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
@@ -476,7 +476,7 @@ dependencies = [
 
 [[package]]
 name = "osmo-bindings-test"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "cosmwasm-std",
@@ -491,7 +491,7 @@ dependencies = [
 
 [[package]]
 name = "osmo-reflect"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
@@ -772,7 +772,7 @@ dependencies = [
 
 [[package]]
 name = "tokenfactory"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "cosmwasm-schema",
  "cosmwasm-std",
