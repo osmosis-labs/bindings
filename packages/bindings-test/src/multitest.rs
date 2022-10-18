@@ -473,7 +473,6 @@ impl Module for OsmosisModule {
                 Ok(to_binary(&SpotPriceResponse { price })?)
             }
             OsmosisQuery::EstimateSwap {
-                sender: _sender,
                 first,
                 route,
                 amount,
@@ -715,7 +714,6 @@ mod tests {
 
         // estimate the price (501505 * 0.997 = 500_000) after fees gone
         let query = OsmosisQuery::estimate_swap(
-            MOCK_CONTRACT_ADDR,
             pool_id,
             &coin_b.denom,
             &coin_a.denom,
@@ -728,7 +726,6 @@ mod tests {
 
         // now try the reverse query. we know what we need to pay to get 1.5M out
         let query = OsmosisQuery::estimate_swap(
-            MOCK_CONTRACT_ADDR,
             pool_id,
             &coin_b.denom,
             &coin_a.denom,
@@ -1056,7 +1053,6 @@ mod tests {
 
         // estimate the price (501505 * 0.997 = 500_000) after fees gone
         let query = OsmosisQuery::estimate_swap(
-            MOCK_CONTRACT_ADDR,
             1,
             "atom",
             "btc",
@@ -1069,7 +1065,6 @@ mod tests {
 
         // now try the reverse query. we know what we need to pay to get 1.5M out
         let query = OsmosisQuery::estimate_swap(
-            MOCK_CONTRACT_ADDR,
             1,
             "atom",
             "btc",
